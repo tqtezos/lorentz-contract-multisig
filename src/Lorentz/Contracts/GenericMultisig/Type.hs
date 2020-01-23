@@ -82,6 +82,9 @@ deriving instance (IsKey key, Read a) => Read (Parameter key a)
 deriving instance (IsKey key, Show a) => Show (Parameter key a)
 deriving instance (IsKey key, IsoValue a) => IsoValue (Parameter key a)
 
+instance (IsKey key, NiceParameter a) => ParameterEntryPoints (Parameter key a) where
+  parameterEntryPoints = pepNone
+
 ----------------------------------------------------------------------------
 -- Storage
 ----------------------------------------------------------------------------

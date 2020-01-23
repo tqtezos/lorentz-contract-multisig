@@ -23,6 +23,7 @@ module Lorentz.Contracts.GenericMultisig where
 import Lorentz hiding (concat)
 import Lorentz.Contracts.Util ()
 import Michelson.Typed.Scope
+import Michelson.Text
 
 import Lorentz.Contracts.IsKey
 import Lorentz.Contracts.GenericMultisig.Type
@@ -264,11 +265,13 @@ genericMultisigContract p runParam = do
 
 specializedMultisigContract ::
      forall a key. (IsKey key, NicePackedValue a, ForbidNestedBigMaps (ToT a))
-  => Contract (Parameter key a) (ContractRef a, Storage key)
+  => Contract (Parameter key a) (Address, Storage key)
 specializedMultisigContract =
-  genericMultisigContract @a @(ContractRef a) @key (Proxy @(Parameter key a)) $ do
+  genericMultisigContract @a @Address @key (Proxy @(Parameter key a)) $ do
     dip $ do
       dup
+      contract
+      assertSome $ mkMTextUnsafe "unexpected parameter type"
       dip nil
       push (toEnum 0 :: Mutez)
     transferTokens

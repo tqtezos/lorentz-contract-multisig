@@ -10,6 +10,7 @@ import Control.Applicative
 import Data.Function
 import System.IO
 import Prelude (die, displayException, catchAny)
+import Data.Functor
 
 import Lorentz
 import Michelson.Typed.Scope
@@ -21,18 +22,20 @@ import qualified Data.Text.Lazy as TL
 import Data.Singletons
 import Text.PrettyPrint.ANSI.Leijen.Internal (Doc, linebreak)
 
+import qualified Lorentz.Contracts.GenericMultisig.CmdLnArgs as GenericMultisigCmdLnArgs
+
 -- | Convert to a `Value`, untype, and render
 showValue :: (IsoValue t, SingI (ToT t), HasNoOp (ToT t)) => t -> TL.Text
 showValue = printTypedValue False . toVal
 
 data CmdLnArgs
-  -- = WhitelistCmdLnArgs { whitelistCmdLnArgs :: WhitelistCmdLnArgs.CmdLnArgs }
+  = GenericMultisigCmdLnArgs { genericMultisigCmdLnArgs :: GenericMultisigCmdLnArgs.CmdLnArgs }
 
 argParser :: Opt.Parser CmdLnArgs
 argParser = Opt.hsubparser $ mconcat
   []
-  -- [ Opt.command "Whitelist" $ fmap WhitelistCmdLnArgs $ Opt.info WhitelistCmdLnArgs.argParser WhitelistCmdLnArgs.infoMod
-  -- ]
+  [ Opt.command "GenericMultisig" $ fmap GenericMultisigCmdLnArgs $ Opt.info GenericMultisigCmdLnArgs.argParser GenericMultisigCmdLnArgs.infoMod
+  ]
 
 programInfo :: Opt.ParserInfo CmdLnArgs
 programInfo =
@@ -74,6 +77,6 @@ main = do
     run :: CmdLnArgs -> IO ()
     run =
       \case
-        -- WhitelistCmdLnArgs {..} ->
-        --   WhitelistCmdLnArgs.runCmdLnArgs whitelistCmdLnArgs
+        GenericMultisigCmdLnArgs {..} ->
+          GenericMultisigCmdLnArgs.runCmdLnArgs genericMultisigCmdLnArgs
 
