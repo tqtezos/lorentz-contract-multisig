@@ -12,7 +12,7 @@ import Data.String (String)
 import Data.Maybe
 import Data.Typeable
 
-import Lorentz hiding (get)
+import Lorentz hiding (checkSignature, get)
 import Michelson.Parser
 import Michelson.Typed.Annotation
 import Michelson.Typed.Haskell.Value
@@ -22,6 +22,7 @@ import Michelson.Typed.T
 import Michelson.Typed.Value
 import Util.IO
 import qualified Michelson.Untyped.Type as U
+import Tezos.Crypto (checkSignature)
 
 import qualified Options.Applicative as Opt
 import qualified Data.Text as T
@@ -275,16 +276,18 @@ data CmdLnArgs
       }
   | ChangeKeysSpecialized
       { threshold :: Natural
-      , signerKeys :: [PublicKey]
+      , newSignerKeys :: [PublicKey]
       , targetContract :: Address
       , counter :: Natural
       , signatures :: Maybe [Maybe Signature]
+      , signerKeys :: [PublicKey]
       }
   | RunSpecialized
       { contractParameter :: SomeContractParam
       , targetContract :: Address
       , counter :: Natural
       , signatures :: Maybe [Maybe Signature]
+      , signerKeys :: [PublicKey]
       }
   -- | PrintWrapper
   --     { parameterType :: SomeSing T
@@ -324,10 +327,11 @@ argParser = Opt.hsubparser $ mconcat
       mkCommandParser "change-keys-specialized"
       (ChangeKeysSpecialized <$>
         parseNatural "threshold" <*>
-        parseSignerKeys "signerKeys" <*>
+        parseSignerKeys "newSignerKeys" <*>
         parseAddress "target-contract" <*>
         parseNatural "counter" <*>
-        parseSignatures "signatures"
+        parseSignatures "signatures" <*>
+        parseSignerKeys "signerKeys"
       )
       "Dump the change keys parameter for the Specialized Multisig contract"
 
@@ -337,7 +341,8 @@ argParser = Opt.hsubparser $ mconcat
         parseSomeContractParam "target-parameter" <*>
         parseAddress "target-contract" <*>
         parseNatural "counter" <*>
-        parseSignatures "signatures"
+        parseSignatures "signatures" <*>
+        parseSignerKeys "signerKeys"
       )
       "Dump the run operation parameter for the Specialized Multisig contract"
 
@@ -373,18 +378,21 @@ runCmdLnArgs = \case
            )
          )
   ChangeKeysSpecialized {..} ->
-    let changeKeysParam = (counter, GenericMultisig.ChangeKeys @PublicKey @((), ContractRef ()) (threshold, signerKeys)) in
-    if threshold < genericLength signerKeys
+    let changeKeysParam = (counter, GenericMultisig.ChangeKeys @PublicKey @((), ContractRef ()) (threshold, newSignerKeys)) in
+    if threshold < genericLength newSignerKeys
        then error "threshold is smaller than the number of signer keys"
        else
        case signatures of
          Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @((), ContractRef ()) $ (targetContract, changeKeysParam)
          Just someSignatures ->
-           TL.putStrLn $
-           printLorentzValue @(GenericMultisig.Parameter PublicKey ((), ContractRef ())) forceOneLine $
-           asParameterType $
-           GenericMultisig.MainParameter $
-           (changeKeysParam, someSignatures)
+            if checkSignaturesValid (targetContract, changeKeysParam) $ zip signerKeys someSignatures
+               then
+                 TL.putStrLn $
+                 printLorentzValue @(GenericMultisig.Parameter PublicKey ((), ContractRef ())) forceOneLine $
+                 asParameterType $
+                 GenericMultisig.MainParameter $
+                 (changeKeysParam, someSignatures)
+               else error "invalid signature(s) provided"
   RunSpecialized {..} ->
     case contractParameter of
       SomeContractParam (param :: Value cp) _ (Dict, Dict) ->
@@ -393,11 +401,14 @@ runCmdLnArgs = \case
         case signatures of
           Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @(Value cp, ContractRef (Value cp)) $ (targetContract, runParam)
           Just someSignatures ->
-            TL.putStrLn $
-            printLorentzValue @(GenericMultisig.Parameter PublicKey (Value cp, ContractRef (Value cp))) forceOneLine $
-            asParameterType $
-            GenericMultisig.MainParameter $
-            (runParam, someSignatures)
+            if checkSignaturesValid (targetContract, runParam) $ zip signerKeys someSignatures
+               then
+                 TL.putStrLn $
+                 printLorentzValue @(GenericMultisig.Parameter PublicKey (Value cp, ContractRef (Value cp))) forceOneLine $
+                 asParameterType $
+                 GenericMultisig.MainParameter $
+                 (runParam, someSignatures)
+               else error "invalid signature(s) provided"
   where
     forceOneLine = True
 
@@ -415,4 +426,11 @@ runCmdLnArgs = \case
   --   -- withDict (compareOpCT @(ToCT (Value t))) $
   --   maybe TL.putStrLn writeFileUtf8 mOutput $
   --   printLorentzContract forceOneLine (GenericMultisig.genericMultisigContractWrapper @(Value t1) @(Value t2) @PublicKey)
+
+checkSignaturesValid :: NicePackedValue cp => (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey (cp, ContractRef cp))) -> [(PublicKey, Maybe Signature)] -> Bool
+checkSignaturesValid = all . checkSignatureValid
+
+checkSignatureValid :: NicePackedValue cp => (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey (cp, ContractRef cp))) -> (PublicKey, Maybe Signature) -> Bool
+checkSignatureValid _ (_, Nothing) = True
+checkSignatureValid xs (pubKey, Just sig) = checkSignature pubKey sig (lPackValue xs)
 
