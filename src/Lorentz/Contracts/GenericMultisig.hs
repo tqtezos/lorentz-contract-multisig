@@ -263,20 +263,6 @@ genericMultisigContract p runParam = do
       genericMultisigContractMain p runParam
     )
 
-specializedMultisigContract ::
-     forall a key. (IsKey key, NicePackedValue a, ForbidNestedBigMaps (ToT a))
-  => Contract (Parameter key a) (Address, Storage key)
-specializedMultisigContract =
-  genericMultisigContract @a @Address @key (Proxy @(Parameter key a)) $ do
-    dip $ do
-      dup
-      contract
-      assertSome $ mkMTextUnsafe "unexpected parameter type"
-      dip nil
-      push (toEnum 0 :: Mutez)
-    transferTokens
-    cons
-
 genericMultisigContractWrapper ::
      forall a b key. (IsKey key, NicePackedValue a, ForbidNestedBigMaps (ToT a))
   => Contract a b
@@ -334,6 +320,20 @@ genericMultisigContractSimpleStorage p runParam = do
     , #cMainParameter /->
       genericMultisigContractSimpleStorageMain p runParam
     )
+
+-- | `genericMultisigContractSimpleStorage` specialized to accept
+-- a contract call of a particular type, sans `Mutez`
+specializedMultisigContract ::
+     forall a key. (IsKey key, NicePackedValue a, ForbidNestedBigMaps (ToT a))
+  => Contract (Parameter key (a, ContractRef a)) (Storage key)
+specializedMultisigContract =
+  genericMultisigContractSimpleStorage @(a, ContractRef a) @key (Proxy @(Parameter key (a, ContractRef a))) $ do
+    unpair
+    dip $ do
+      dip nil
+      push $ toEnum @Mutez 0
+    transferTokens
+    cons
 
 -- | Generic multisig contract with pairs of keys representing "individual" signers
 generigMultisigContract223 ::

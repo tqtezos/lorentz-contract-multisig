@@ -108,6 +108,10 @@ type Storage key =
     )
   )
 
+-- | The initial @storedCounter@
+initialMultisigCounter :: Natural
+initialMultisigCounter = 0
+
 ----------------------------------------------------------------------------
 -- Errors
 ----------------------------------------------------------------------------
