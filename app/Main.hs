@@ -33,7 +33,6 @@ data CmdLnArgs
 
 argParser :: Opt.Parser CmdLnArgs
 argParser = Opt.hsubparser $ mconcat
-  []
   [ Opt.command "GenericMultisig" $ fmap GenericMultisigCmdLnArgs $ Opt.info GenericMultisigCmdLnArgs.argParser GenericMultisigCmdLnArgs.infoMod
   ]
 

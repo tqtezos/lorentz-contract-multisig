@@ -317,7 +317,7 @@ argParser = Opt.hsubparser $ mconcat
         parseNatural "threshold" <*>
         parseSignerKeys "signerKeys"
       )
-      "Dump the Specialized Multisig contract in form of Michelson code"
+      "Dump the intial storage for the Specialized Multisig contract"
 
     changeKeysSpecializedSubCmd =
       mkCommandParser "change-keys-specialized"
@@ -328,7 +328,7 @@ argParser = Opt.hsubparser $ mconcat
         parseNatural "counter" <*>
         parseSignatures "signatures"
       )
-      "Dump the Specialized Multisig contract in form of Michelson code"
+      "Dump the change keys parameter for the Specialized Multisig contract"
 
     runSpecializedSubCmd =
       mkCommandParser "run-specialized"
@@ -338,7 +338,7 @@ argParser = Opt.hsubparser $ mconcat
         parseNatural "counter" <*>
         parseSignatures "signatures"
       )
-      "Dump the Specialized Multisig contract in form of Michelson code"
+      "Dump the run operation parameter for the Specialized Multisig contract"
 
 --     printWrapperSubCmd =
 --       mkCommandParser "print-wrapper"
