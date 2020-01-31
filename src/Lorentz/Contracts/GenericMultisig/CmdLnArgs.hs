@@ -26,6 +26,7 @@ import qualified Michelson.Untyped.Type as U
 import qualified Options.Applicative as Opt
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as TL
+import qualified Data.ByteString.Base16 as Base16
 import Data.Constraint
 import Data.Singletons
 
@@ -215,11 +216,11 @@ fromUntypedT (U.TBigMap ct x) = TBigMap (fromUntypedComparable ct) $ fromUntyped
 
 parseSignatures :: String -> Opt.Parser (Maybe [Maybe Signature])
 parseSignatures name =
-  (Opt.option (Just <$> Opt.auto) $ mconcat
+  Opt.option Opt.auto $ mconcat
     [ Opt.long name
     , Opt.metavar "Maybe [Maybe Signature]"
     , Opt.help "Ordered list of signatures, with Nothing for missing. Elide to dump the message to sign."
-    ]) <|> pure Nothing
+    ]
 
 -- | Parse some `T`
 parseSomeT :: String -> Opt.Parser (SomeSing T)
@@ -372,30 +373,40 @@ runCmdLnArgs = \case
            )
          )
   ChangeKeysSpecialized {..} ->
-    let changeKeysParam = (counter, GenericMultisig.ChangeKeys @PublicKey @() (threshold, signerKeys)) in
+    let changeKeysParam = (counter, GenericMultisig.ChangeKeys @PublicKey @((), ContractRef ()) (threshold, signerKeys)) in
     if threshold < genericLength signerKeys
        then error "threshold is smaller than the number of signer keys"
        else
        case signatures of
-         Nothing -> print . lPackValue $ (targetContract, changeKeysParam)
+         Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @((), ContractRef ()) $ (targetContract, changeKeysParam)
          Just someSignatures ->
            TL.putStrLn $
-           printLorentzValue @(GenericMultisig.Parameter PublicKey ()) forceOneLine $
+           printLorentzValue @(GenericMultisig.Parameter PublicKey ((), ContractRef ())) forceOneLine $
+           asParameterType $
            GenericMultisig.MainParameter $
            (changeKeysParam, someSignatures)
   RunSpecialized {..} ->
     case contractParameter of
       SomeContractParam (param :: Value cp) _ (Dict, Dict) ->
-        let runParam = (counter, GenericMultisig.Operation @PublicKey @(Value cp) param) in
+        assertNestedBigMapsAbsense @cp $
+        let runParam = (counter, GenericMultisig.Operation @PublicKey @(Value cp, ContractRef (Value cp)) (param, toContractRef @(Value cp) targetContract)) in
         case signatures of
-          Nothing -> print . lPackValue $ (targetContract, runParam)
+          Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @(Value cp, ContractRef (Value cp)) $ (targetContract, runParam)
           Just someSignatures ->
             TL.putStrLn $
-            printLorentzValue @(GenericMultisig.Parameter PublicKey (Value cp)) forceOneLine $
+            printLorentzValue @(GenericMultisig.Parameter PublicKey (Value cp, ContractRef (Value cp))) forceOneLine $
+            asParameterType $
             GenericMultisig.MainParameter $
             (runParam, someSignatures)
   where
     forceOneLine = True
+
+    asParameterType :: forall cp. GenericMultisig.Parameter PublicKey cp -> GenericMultisig.Parameter PublicKey cp
+    asParameterType = id
+
+    asPackType :: forall cp. (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey cp)) -> (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey cp))
+    asPackType = id
+
   -- PrintWrapper (SomeSing (st1 :: Sing t1)) (SomeSing (st2 :: Sing t2)) mOutput forceOneLine ->
   --   withDict (singIT st) $
   --   withDict (singTypeableT st) $

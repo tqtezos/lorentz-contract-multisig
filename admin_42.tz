@@ -1,0 +1,15 @@
+parameter nat;
+storage address;
+code {
+  DUP;
+  CDR;
+  SENDER;
+  ASSERT_CMPEQ;
+  DUP;
+  CAR;
+  PUSH nat 42;
+  ASSERT_CMPEQ;
+  CDR;
+  NIL operation;
+  PAIR
+}

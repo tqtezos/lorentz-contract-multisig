@@ -72,7 +72,7 @@ preparePayload _ = do
   dip $ do
     unpair
     dup >> self @p >> address >> pair
-    pack
+    pack @(Address, (Natural, GenericMultisigAction key a))
     dip (unpair @Natural >> dip swap) >> swap
 
 -- | `assertEq` on the parameter counter and storage counter

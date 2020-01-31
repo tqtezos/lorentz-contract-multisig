@@ -37,6 +37,7 @@ library:
     - optparse-applicative
     - transformers
     - megaparsec
+    - base16-bytestring
 
 executables:
   lorentz-contract-multisig:
