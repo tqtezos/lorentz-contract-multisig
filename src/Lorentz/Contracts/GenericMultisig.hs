@@ -4,6 +4,7 @@
 
 {-# OPTIONS -Wno-missing-export-lists #-}
 {-# OPTIONS -Wno-orphans #-}
+{-# OPTIONS -Wno-unused-do-bind #-}
 
 -- | To use the contract:
 -- @
@@ -23,7 +24,6 @@ module Lorentz.Contracts.GenericMultisig where
 import Lorentz hiding (concat)
 import Lorentz.Contracts.Util ()
 import Michelson.Typed.Scope
-import Michelson.Text
 
 import Lorentz.Contracts.IsKey
 import Lorentz.Contracts.GenericMultisig.Type
@@ -212,16 +212,7 @@ genericMultisigContractMain p runParam = do
   swap
   -- b on top of stack
 
-  dip $ do
-    multisigSetup @key p
-    -- _
-    -- assertNoTokensSent
-    -- preparePayload
-    -- checkCountersMatch
-    -- countValidSignatures @key
-    -- assertQuorumPresent
-    -- assertAllSignaturesChecked @key
-    -- incrementAndStoreCounter
+  dip $ multisigSetup @key p
   swap >> dip swap
 
   -- # We have now handled the signature verification part,
@@ -344,96 +335,4 @@ generigMultisigContract223 =
   genericMultisigContractSimpleStorage (Proxy @(Parameter (PublicKey, PublicKey) (Lambda () [Operation]))) $ do
     unit
     exec
-
--- parameter (or (unit %default)
---               (pair %main
---                  (pair :payload
---                     (nat %counter) # counter, used to prevent replay attacks
---                     (or :action    # payload to sign, represents the requested action
---                        (lambda %operation unit (list operation))
---                        (pair %change_keys          # change the keys controlling the multisig
---                           (nat %threshold)         # new threshold
---                           (list %keys key))))     # new list of keys
---                  (list %sigs (option signature))));    # signatures
---
--- storage (pair (nat %stored_counter) (pair (nat %threshold) (list %keys key))) ;
---
--- code
---   {
---     UNPAIR ;
---     IF_LEFT
---       { # Default entry point: do nothing
---         # This entry point can be used to send tokens to this contract
---         DROP ; NIL operation ; PAIR }
---       { # Main entry point
---         # Assert no token was sent:
---         # to send tokens, the default entry point should be used
---         PUSH mutez 0 ; AMOUNT ; ASSERT_CMPEQ ;
---         SWAP ; DUP ; DIP { SWAP } ;
---         DIP
---           {
---             UNPAIR ;
---             # pair the payload with the current contract address, to ensure signatures
---             # can't be replayed accross different contracts if a key is reused.
---             DUP ; SELF ; ADDRESS ; PAIR ;
---             PACK ; # form the binary payload that we expect to be signed
---             DIP { UNPAIR @counter ; DIP { SWAP } } ; SWAP
---           } ;
---
---         # Check that the counters match
---         UNPAIR @stored_counter; DIP { SWAP };
---         ASSERT_CMPEQ ;
---
---         # Compute the number of valid signatures
---         DIP { SWAP } ; UNPAIR @threshold @keys;
---         DIP
---           {
---             # Running count of valid signatures
---             PUSH @valid nat 0; SWAP ;
---             ITER
---               {
---                 DIP { SWAP } ; SWAP ;
---                 IF_CONS
---                   {
---                     IF_SOME
---                       { SWAP ;
---                         DIP
---                           {
---                             SWAP ; DIIP { DUUP } ;
---                             # Checks signatures, fails if invalid
---                             { DUUUP; DIP {CHECK_SIGNATURE}; SWAP; IF {DROP} {FAILWITH} };
---                             PUSH nat 1 ; ADD @valid } }
---                       { SWAP ; DROP }
---                   }
---                   {
---                     # There were fewer signatures in the list
---                     # than keys. Not all signatures must be present, but
---                     # they should be marked as absent using the option type.
---                     FAIL
---                   } ;
---                 SWAP
---               }
---           } ;
---         # Assert that the threshold is less than or equal to the
---         # number of valid signatures.
---         ASSERT_CMPLE ;
---         # Assert no unchecked signature remains
---         IF_CONS {FAIL} {} ;
---         DROP ;
---
---         # Increment counter and place in storage
---         DIP { UNPAIR ; PUSH nat 1 ; ADD @new_counter ; PAIR} ;
---
---         # We have now handled the signature verification part,
---         # produce the operation requested by the signers.
---         IF_LEFT
---           { # Get operation
---             UNIT ; EXEC
---           }
---           {
---             # Change set of signatures
---             DIP { CAR } ; SWAP ; PAIR ; NIL operation
---           };
---         PAIR }
---   }
 

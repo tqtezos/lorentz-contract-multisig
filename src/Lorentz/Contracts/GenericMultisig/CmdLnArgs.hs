@@ -278,6 +278,7 @@ data CmdLnArgs
       { threshold :: Natural
       , newSignerKeys :: [PublicKey]
       , targetContract :: Address
+      , multisigContract :: Address
       , counter :: Natural
       , signatures :: Maybe [Maybe Signature]
       , signerKeys :: [PublicKey]
@@ -285,6 +286,7 @@ data CmdLnArgs
   | RunSpecialized
       { contractParameter :: SomeContractParam
       , targetContract :: Address
+      , multisigContract :: Address
       , counter :: Natural
       , signatures :: Maybe [Maybe Signature]
       , signerKeys :: [PublicKey]
@@ -329,6 +331,7 @@ argParser = Opt.hsubparser $ mconcat
         parseNatural "threshold" <*>
         parseSignerKeys "newSignerKeys" <*>
         parseAddress "target-contract" <*>
+        parseAddress "multisig-contract" <*>
         parseNatural "counter" <*>
         parseSignatures "signatures" <*>
         parseSignerKeys "signerKeys"
@@ -340,6 +343,7 @@ argParser = Opt.hsubparser $ mconcat
       (RunSpecialized <$>
         parseSomeContractParam "target-parameter" <*>
         parseAddress "target-contract" <*>
+        parseAddress "multisig-contract" <*>
         parseNatural "counter" <*>
         parseSignatures "signatures" <*>
         parseSignerKeys "signerKeys"
@@ -399,9 +403,9 @@ runCmdLnArgs = \case
         assertNestedBigMapsAbsense @cp $
         let runParam = (counter, GenericMultisig.Operation @PublicKey @(Value cp, ContractRef (Value cp)) (param, toContractRef @(Value cp) targetContract)) in
         case signatures of
-          Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @(Value cp, ContractRef (Value cp)) $ (targetContract, runParam)
+          Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @(Value cp, ContractRef (Value cp)) $ (multisigContract, runParam)
           Just someSignatures ->
-            if checkSignaturesValid (targetContract, runParam) $ zip signerKeys someSignatures
+            if checkSignaturesValid (multisigContract, runParam) $ zip signerKeys someSignatures
                then
                  TL.putStrLn $
                  printLorentzValue @(GenericMultisig.Parameter PublicKey (Value cp, ContractRef (Value cp))) forceOneLine $
