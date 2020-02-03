@@ -1,4 +1,9 @@
 
+# Originated Example
+
+You can find an originated example [here](https://better-call.dev/babylon/KT1HmDgVFNM1t9sSYdURzUXWLUhb6AMyNxFW/operations).
+
+
 ## Admin42 Contract
 
 The `admin_42.tz` accepts a `nat` parameter (which must be `42`), only from the address in storage.
