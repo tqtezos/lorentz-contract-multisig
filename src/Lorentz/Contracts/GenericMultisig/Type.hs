@@ -7,6 +7,7 @@
 module Lorentz.Contracts.GenericMultisig.Type where
 
 import Lorentz hiding (concat)
+import Michelson.Typed.Annotation
 -- import Lorentz.Contracts.Util ()
 
 import Lorentz.Contracts.IsKey
@@ -15,6 +16,7 @@ import Fmt (Buildable(..), (+|), (|+))
 import Data.ByteString.Internal (unpackChars)
 
 import Text.Show (Show(..))
+import GHC.Generics
 
 ----------------------------------------------------------------------------
 -- Parameter
@@ -82,8 +84,21 @@ deriving instance (IsKey key, Read a) => Read (Parameter key a)
 deriving instance (IsKey key, Show a) => Show (Parameter key a)
 deriving instance (IsKey key, IsoValue a) => IsoValue (Parameter key a)
 
-instance (IsKey key, NiceParameter a) => ParameterEntryPoints (Parameter key a) where
-  parameterEntryPoints = pepNone
+-- | Since `HasTypeAnn` isn't public, each case of @key@ needs to be provided individually
+instance NiceParameter a => ParameterEntryPoints (Parameter PublicKey a) where
+  parameterEntryPoints = ParameterEntryPointsSplit $
+    case pepRecursive @(Parameter PublicKey ()) of
+      ParameterEntryPointsSplit xs ->
+        case xs of
+          NTOr ta tb tc ys zs ->
+            case zs of
+              NTPair ta' tb' tc' as bs ->
+                case as of
+                  NTPair ta'' tb'' tc'' as' bs' ->
+                    case bs' of
+                      NTOr ta''' tb''' tc''' _ bs'' ->
+                        NTOr ta tb tc ys $
+                        NTPair ta' tb' tc' (NTPair ta'' tb'' tc'' as' (NTOr ta''' tb''' tc''' starNotes bs'')) bs
 
 ----------------------------------------------------------------------------
 -- Storage
