@@ -10,7 +10,7 @@ The `admin_42.tz` accepts a `nat` parameter (which must be `42`), only from the 
 This is a good contract to test the specialized multisig.
 
 ```bash
-❯❯❯ alpha-client --wait none originate contract Admin42 \
+❯❯❯ tezos-client --wait none originate contract Admin42 \
   transferring 0 from $BOB_ADDRESS running \
   "$(cat admin_42.tz | tr '\n' ' ')" --init "\"$BOB_ADDRESS\"" --burn-cap 0.406
 ```
@@ -22,7 +22,7 @@ This is a good contract to test the specialized multisig.
 Valid call:
 
 ```bash
-❯❯❯ alpha-client --wait none transfer 0 from $BOB_ADDRESS to $ADMIN42_ADDRESS --arg 42 --burn-cap 0.000001
+❯❯❯ tezos-client --wait none transfer 0 from $BOB_ADDRESS to $ADMIN42_ADDRESS --arg 42 --burn-cap 0.000001
 
 Waiting for the node to be bootstrapped before injection...
 Current head: BLUy1hNv2rcX (timestamp: 2020-01-31T18:54:06-00:00, validation: 2020-01-31T18:54:40-00:00)
@@ -59,7 +59,7 @@ This sequence of operations was run:
 Invalid call (wrong argument):
 
 ```bash
-❯❯❯ alpha-client --wait none transfer 0 from $BOB_ADDRESS to $ADMIN42_ADDRESS --arg 43 --burn-cap 0.000001
+❯❯❯ tezos-client --wait none transfer 0 from $BOB_ADDRESS to $ADMIN42_ADDRESS --arg 43 --burn-cap 0.000001
 
 Waiting for the node to be bootstrapped before injection...
 Current head: BLYeCgYQjCne (timestamp: 2020-01-31T18:54:36-00:00, validation: 2020-01-31T18:54:56-00:00)
@@ -102,7 +102,7 @@ Fatal error:
 Invalid call (wrong user):
 
 ```bash
-❯❯❯ alpha-client --wait none transfer 0 from $ALICE_ADDRESS to $ADMIN42_ADDRESS --arg 42 --burn-cap 0.000001
+❯❯❯ tezos-client --wait none transfer 0 from $ALICE_ADDRESS to $ADMIN42_ADDRESS --arg 42 --burn-cap 0.000001
 
 Waiting for the node to be bootstrapped before injection...
 Current head: BKvAECjia3c4 (timestamp: 2020-02-03T19:06:18-00:00, validation: 2020-02-03T19:06:31-00:00)
@@ -147,7 +147,7 @@ Fatal error:
 To print the contract, specialized to `nat`:
 
 ```bash
-❯❯❯ ./stack exec -- lorentz-contract-multisig GenericMultisig print-specialized \
+❯❯❯ stack exec -- lorentz-contract-multisig GenericMultisig print-specialized \
   --parameterType 'nat' --oneline
 ```
 
@@ -161,27 +161,27 @@ get_secret_key(){ tezos-client show address $1 -S 2>/dev/null | tail -n 1 | cut 
 To make the initial storage, e.g. for one admin:
 
 ```bash
-❯❯❯ ./stack exec -- lorentz-contract-multisig GenericMultisig init-specialized \
+❯❯❯ stack exec -- lorentz-contract-multisig GenericMultisig init-specialized \
   --threshold 1 --signerKeys "[\"$(get_public_key bob)\"]"
 Pair 0 (Pair 1 { "edpkuPTVBFtbYd6gZWryXypSYYq6g7FvyucwphoU78T1vmGkbhj6qb" })
 ```
 
-If the `threshold` is set too low, an error is thrown:
+If the `threshold` is set higher than the number of admins that can sign, an error is thrown:
 
 ```bash
-❯❯❯ ./stack exec -- lorentz-contract-multisig GenericMultisig init-specialized \
-  --threshold 0 --signerKeys "[\"$(get_public_key bob)\"]"
-threshold is smaller than the number of signer keys
+❯❯❯ stack exec -- lorentz-contract-multisig GenericMultisig init-specialized  \ --threshold 2 --signerKeys "[\"$(get_public_key bob)\"]"
+
+threshold is greater than the number of signer keys
 CallStack (from HasCallStack):
-  error, called at src/Lorentz/Contracts/GenericMultisig/CmdLnArgs.hs:366:13 in lorentz-contract-multisig-0.1.0.0-DgLAc9ZP0CUC0oppqO7m0V:Lorentz.Contracts.GenericMultisig.CmdLnArgs
+  error, called at src/Lorentz/Contracts/GenericMultisig/CmdLnArgs.hs:376:13 in lorentz-contract-multisig-0.1.0.0-BUWXHalK6PtIEryQAwm6u2:Lorentz.Contracts.GenericMultisig.CmdLnArgs
 ```
 
 ```bash
-❯❯❯ alpha-client --wait none originate contract MultisigNat \
+❯❯❯ tezos-client --wait none originate contract MultisigNat \
   transferring 0 from $BOB_ADDRESS running \
-  "$(./stack exec -- lorentz-contract-multisig GenericMultisig \
+  "$(stack exec -- lorentz-contract-multisig GenericMultisig \
   print-specialized --parameterType 'nat' --oneline)" \
-  --init "$(./stack exec -- lorentz-contract-multisig GenericMultisig \
+  --init "$(stack exec -- lorentz-contract-multisig GenericMultisig \
   init-specialized --threshold 1 \
   --signerKeys "[\"$(get_public_key bob)\"]")" --burn-cap 1.012
 
@@ -238,7 +238,7 @@ Contract memorized as MultisigNat.
 Next, we originate a copy of the `admin_42` contract where the `MultisigNat` contract is the "admin":
 
 ```bash
-❯❯❯ alpha-client --wait none originate contract MultisigAdmin42 \
+❯❯❯ tezos-client --wait none originate contract MultisigAdmin42 \
   transferring 0 from $BOB_ADDRESS running \
   "$(cat admin_42.tz | tr '\n' ' ')" --init "\"$MULTISIG_NAT_ADDRESS\"" --burn-cap 0.406
 
@@ -293,7 +293,7 @@ Contract memorized as MultisigAdmin42.
 Generate the `bytes` to sign:
 
 ```bash
-❯❯❯ ./stack exec -- lorentz-contract-multisig GenericMultisig run-specialized \
+❯❯❯ stack exec -- lorentz-contract-multisig GenericMultisig run-specialized \
   --target-parameterType 'nat' --target-parameter '42' \
   --target-contract "$MULTISIG_ADMIN42_ADDRESS" --multisig-contract "$MULTISIG_NAT_ADDRESS" --counter 0 \
   --signatures "Nothing" \
@@ -304,7 +304,7 @@ Generate the `bytes` to sign:
 Sign using the `tezos-client`:
 
 ```bash
-❯❯❯ alpha-client sign bytes "0x0507070a00000016018821643b501b2236a21871f3c3b5f52ce3c346ee000707000005050707002a0a00000016013019aebe083e0b201a3830d4075a3c8b715e03bc00" for bob
+❯❯❯ tezos-client sign bytes "0x0507070a00000016018821643b501b2236a21871f3c3b5f52ce3c346ee000707000005050707002a0a00000016013019aebe083e0b201a3830d4075a3c8b715e03bc00" for bob
 
 Signature: edsigu58rM3JFCWKfsLFtETZGd81FC3b32FY3RU1DeAYNQiDGEGY2r3NUokzQEAbjscnZdtAiX7DHhj5UmYtKjUMkMpUxjxQ8x1
 ```
@@ -316,7 +316,7 @@ Signature: edsigu58rM3JFCWKfsLFtETZGd81FC3b32FY3RU1DeAYNQiDGEGY2r3NUokzQEAbjscnZ
 Generate the signed parameter:
 
 ```bash
-❯❯❯ ./stack exec -- lorentz-contract-multisig GenericMultisig run-specialized \
+❯❯❯ stack exec -- lorentz-contract-multisig GenericMultisig run-specialized \
   --target-parameterType 'nat' --target-parameter '42' \
   --target-contract "$MULTISIG_ADMIN42_ADDRESS" --multisig-contract "$MULTISIG_NAT_ADDRESS" --counter 0 \
   --signatures "Just[Just\"$OPERATION_SIGNATURE\"]" --signerKeys "[\"$(get_public_key bob)\"]"
@@ -326,8 +326,8 @@ Right (Pair (Pair 0 (Left (Pair 42 "KT1Cy6mRw9U19GAkmcsLjj3sBezG3XBL9VZf"))) { S
 To submit the parameter:
 
 ```bash
-❯❯❯  alpha-client --wait none transfer 0 from $BOB_ADDRESS to $MULTISIG_NAT_ADDRESS \
-  --arg "$(./stack exec -- lorentz-contract-multisig GenericMultisig run-specialized \
+❯❯❯  tezos-client --wait none transfer 0 from $BOB_ADDRESS to $MULTISIG_NAT_ADDRESS \
+  --arg "$(stack exec -- lorentz-contract-multisig GenericMultisig run-specialized \
   --target-parameterType 'nat' --target-parameter '42' \
   --target-contract "$MULTISIG_ADMIN42_ADDRESS" --multisig-contract "$MULTISIG_NAT_ADDRESS" --counter 0 \
   --signatures "Just[Just\"$OPERATION_SIGNATURE\"]" \
