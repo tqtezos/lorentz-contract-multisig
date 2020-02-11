@@ -372,8 +372,8 @@ runCmdLnArgs = \case
     maybe TL.putStrLn writeFileUtf8 mOutput $
     printLorentzContract forceOneLine (GenericMultisig.specializedMultisigContract @(Value t) @PublicKey)
   InitSpecialized {..} ->
-    if threshold < genericLength signerKeys
-       then error "threshold is smaller than the number of signer keys"
+    if threshold > genericLength signerKeys
+       then error "threshold is greater than the number of signer keys"
        else TL.putStrLn $
          printLorentzValue @(GenericMultisig.Storage PublicKey) forceOneLine $
          ( GenericMultisig.initialMultisigCounter
@@ -383,8 +383,8 @@ runCmdLnArgs = \case
          )
   ChangeKeysSpecialized {..} ->
     let changeKeysParam = (counter, GenericMultisig.ChangeKeys @PublicKey @((), ContractRef ()) (threshold, newSignerKeys)) in
-    if threshold < genericLength newSignerKeys
-       then error "threshold is smaller than the number of signer keys"
+    if threshold > genericLength newSignerKeys
+       then error "threshold is greater than the number of signer keys"
        else
        case signatures of
          Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @((), ContractRef ()) $ (targetContract, changeKeysParam)
