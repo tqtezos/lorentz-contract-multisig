@@ -363,14 +363,15 @@ infoMod = mconcat
 
 runCmdLnArgs :: CmdLnArgs -> IO ()
 runCmdLnArgs = \case
-  PrintSpecialized (SomeSing (st :: Sing t)) mOutput forceOneLine ->
+  PrintSpecialized (SomeSing (st :: Sing t)) mOutput forceOneLine' ->
     withDict (singIT st) $
     withDict (singTypeableT st) $
     assertOpAbsense @t $
     assertBigMapAbsense @t $
     assertNestedBigMapsAbsense @t $
     maybe TL.putStrLn writeFileUtf8 mOutput $
-    printLorentzContract forceOneLine (GenericMultisig.specializedMultisigContract @(Value t) @PublicKey)
+    printLorentzContract forceOneLine' $
+    GenericMultisig.specializedMultisigContract @(Value t) @PublicKey
   InitSpecialized {..} ->
     if threshold > genericLength signerKeys
        then error "threshold is greater than the number of signer keys"
@@ -392,9 +393,8 @@ runCmdLnArgs = \case
             if checkSignaturesValid (targetContract, changeKeysParam) $ zip signerKeys someSignatures
                then
                  TL.putStrLn $
-                 printLorentzValue @(GenericMultisig.Parameter PublicKey ((), ContractRef ())) forceOneLine $
+                 printLorentzValue @(GenericMultisig.MainParams PublicKey ((), ContractRef ())) forceOneLine $
                  asParameterType $
-                 GenericMultisig.MainParameter $
                  (changeKeysParam, someSignatures)
                else error "invalid signature(s) provided"
   RunSpecialized {..} ->
@@ -408,15 +408,14 @@ runCmdLnArgs = \case
             if checkSignaturesValid (multisigContract, runParam) $ zip signerKeys someSignatures
                then
                  TL.putStrLn $
-                 printLorentzValue @(GenericMultisig.Parameter PublicKey (Value cp, ContractRef (Value cp))) forceOneLine $
+                 printLorentzValue @(GenericMultisig.MainParams PublicKey (Value cp, ContractRef (Value cp))) forceOneLine $
                  asParameterType $
-                 GenericMultisig.MainParameter $
                  (runParam, someSignatures)
                else error "invalid signature(s) provided"
   where
     forceOneLine = True
 
-    asParameterType :: forall cp. GenericMultisig.Parameter PublicKey cp -> GenericMultisig.Parameter PublicKey cp
+    asParameterType :: forall cp. GenericMultisig.MainParams PublicKey cp -> GenericMultisig.MainParams PublicKey cp
     asParameterType = id
 
     asPackType :: forall cp. (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey cp)) -> (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey cp))

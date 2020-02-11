@@ -16,7 +16,7 @@ import Fmt (Buildable(..), (+|), (|+))
 import Data.ByteString.Internal (unpackChars)
 
 import Text.Show (Show(..))
-import GHC.Generics
+
 
 ----------------------------------------------------------------------------
 -- Parameter
