@@ -5,9 +5,11 @@ module Lorentz.Contracts.GenericMultisig.CmdLnArgs where
 import Control.Applicative
 import Text.Show (Show(..))
 import Data.List
+import Data.Eq
 import Data.Either
 import Data.Function (id)
-import Prelude (FilePath, IO, Ord(..), print)
+import Data.Functor
+import Prelude (FilePath, IO, Ord(..), print, putStrLn)
 import Data.String (String)
 import Data.Maybe
 import Data.Typeable
@@ -274,6 +276,10 @@ data CmdLnArgs
       { threshold :: Natural
       , signerKeys :: [PublicKey]
       }
+  | GetCounterSpecialized
+      { storageText :: Text
+      , signerKeys :: [PublicKey]
+      }
   | ChangeKeysSpecialized
       { threshold :: Natural
       , newSignerKeys :: [PublicKey]
@@ -302,6 +308,7 @@ argParser :: Opt.Parser CmdLnArgs
 argParser = Opt.hsubparser $ mconcat
   [ printSpecializedSubCmd
   , initSpecializedSubCmd
+  , getCounterSpecializedSubCmd
   , changeKeysSpecializedSubCmd
   , runSpecializedSubCmd
   -- , printWrapperSubCmd
@@ -324,6 +331,16 @@ argParser = Opt.hsubparser $ mconcat
         parseSignerKeys "signerKeys"
       )
       "Dump the intial storage for the Specialized Multisig contract"
+
+    getCounterSpecializedSubCmd =
+      mkCommandParser "get-counter-specialized"
+      (GetCounterSpecialized <$>
+        fmap T.pack (parseString "storageText") <*>
+        parseSignerKeys "signerKeys"
+      )
+      ("Parse the storage for the Specialized Multisig contract, " <>
+       "ensure the 'signerKeys' match, " <>
+       "and return the current counter")
 
     changeKeysSpecializedSubCmd =
       mkCommandParser "change-keys-specialized"
@@ -382,6 +399,22 @@ runCmdLnArgs = \case
            , signerKeys
            )
          )
+  GetCounterSpecialized {..} ->
+    let parsedStorage = parseNoEnv
+          (G.parseTypeCheckValue @(ToT (GenericMultisig.Storage PublicKey)))
+          "specialized-multisig"
+          storageText
+     in let (storedCounter, (_threshold, storedSignerKeys)) =
+              either
+                (error . T.pack . show)
+                (fromVal @(GenericMultisig.Storage PublicKey))
+                parsedStorage
+         in if storedSignerKeys == signerKeys
+               then print storedCounter
+               else do
+                 putStrLn @Text "Stored signer keys:"
+                 print signerKeys
+                 error "Stored signer keys do not match provided signer keys"
   ChangeKeysSpecialized {..} ->
     let changeKeysParam = (counter, GenericMultisig.ChangeKeys @PublicKey @((), ContractRef ()) (threshold, newSignerKeys)) in
     if threshold > genericLength newSignerKeys
