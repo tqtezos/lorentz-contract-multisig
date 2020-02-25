@@ -2,6 +2,7 @@
 
 module Lorentz.Contracts.GenericMultisig.CmdLnArgs where
 
+import Control.Monad (Monad(..))
 import Control.Applicative
 import Text.Show (Show(..))
 import Data.List
@@ -22,9 +23,14 @@ import Michelson.Typed.Scope
 import Michelson.Typed.Sing
 import Michelson.Typed.T
 import Michelson.Typed.Value
+import Michelson.Typed.Instr
+import Michelson.Typed.EntryPoints
 import Util.IO
 import qualified Michelson.Untyped.Type as U
 import Tezos.Crypto (checkSignature)
+import qualified Michelson.TypeCheck.Types as TypeCheck
+import Michelson.Macro
+import Michelson.TypeCheck.Instr
 
 import qualified Options.Applicative as Opt
 import qualified Data.Text as T
@@ -32,6 +38,7 @@ import qualified Data.Text.Lazy.IO as TL
 import qualified Data.ByteString.Base16 as Base16
 import Data.Constraint
 import Data.Singletons
+import Text.Megaparsec (parse)
 
 import Lorentz.Contracts.Util ()
 import Lorentz.Contracts.SomeContractParam
@@ -46,12 +53,17 @@ instance IsoCValue (Value ('Tc ct)) where
   toCVal (VC xs) = xs
   fromCVal = VC
 
-
 assertOpAbsense :: forall (t :: T) a. SingI t => (HasNoOp t => a) -> a
 assertOpAbsense f =
   case opAbsense (sing @t) of
     Nothing -> error "assertOpAbsense"
     Just Dict -> forbiddenOp @t f
+
+assertContractAbsense :: forall (t :: T) a. SingI t => (HasNoContract t => a) -> a
+assertContractAbsense f =
+  case contractTypeAbsense (sing @t) of
+    Nothing -> error "assertContractAbsense"
+    Just Dict -> forbiddenContractType @t f
 
 assertBigMapAbsense :: forall (t :: T) a. SingI t => (HasNoBigMap t => a) -> a
 assertBigMapAbsense f =
@@ -78,6 +90,38 @@ assertIsComparable f =
   case sing @t of
     STc _ -> f
     _ -> error "assertIsComparable"
+
+data SomeContractStorage where
+  SomeContractStorage :: (NiceStorage (Value a))
+    => Value a
+    -> SomeContractStorage
+
+fromSomeContractStorage :: forall b. SomeContractStorage -> (forall a. NiceStorage (Value a) => Value a -> b) -> b
+fromSomeContractStorage (SomeContractStorage xs) f = f xs
+
+parseSomeContractStorage :: String -> Opt.Parser SomeContractStorage
+parseSomeContractStorage name =
+  (\(SomeSing (st :: Sing t)) paramStr ->
+    withDict (singIT st) $
+    withDict (singTypeableT st) $
+    assertOpAbsense @t $
+    assertContractAbsense @t $
+    assertBigMapAbsense @t $
+    assertNestedBigMapsAbsense @t $
+    let parsedParam = parseNoEnv
+          (G.parseTypeCheckValue @t)
+          name
+          paramStr
+     in let param = either (error . T.pack . show) id parsedParam
+     in SomeContractStorage param
+  ) <$>
+  parseSomeT name <*>
+  Opt.strOption @Text
+    (mconcat
+      [ Opt.long name
+      , Opt.metavar "Michelson Value"
+      , Opt.help $ "The Michelson Value: " ++ name
+      ])
 
 singTypeableCT :: forall (t :: CT). Sing t -> Dict (Typeable t)
 singTypeableCT SCInt = Dict
@@ -265,6 +309,17 @@ parseSomeContractParam name =
       , Opt.help $ "The Michelson Value: " ++ name
       ])
 
+parseSomeContract :: String -> Opt.Parser TypeCheck.SomeContract
+parseSomeContract name =
+  Opt.option (Opt.str >>= someContractParser)
+    (mconcat
+      [ Opt.long name
+      , Opt.metavar "Michelson Contract Source"
+      , Opt.help $ "The Michelson contract: " ++ name
+      ])
+  where
+  someContractParser :: Text -> Opt.ReadM TypeCheck.SomeContract
+  someContractParser = either (fail . show) (either (fail . show) return . typeCheckContract mempty . expandContract) . parse program name
 
 data CmdLnArgs
   = PrintSpecialized
@@ -272,15 +327,30 @@ data CmdLnArgs
       , outputPath :: Maybe FilePath
       , oneline :: Bool
       }
+  | PrintWrapped
+      { contractToWrap :: TypeCheck.SomeContract
+      , outputPath :: Maybe FilePath
+      , oneline :: Bool
+      }
   | InitSpecialized
       { threshold :: Natural
+      , signerKeys :: [PublicKey]
+      }
+  | InitWrapped
+      { targetStorage :: SomeContractStorage
+      , threshold :: Natural
       , signerKeys :: [PublicKey]
       }
   | GetCounterSpecialized
       { storageText :: Text
       , signerKeys :: [PublicKey]
       }
-  | ChangeKeysSpecialized
+  | GetCounterWrapped
+      { storageType :: SomeSing T
+      , storageText :: Text
+      , signerKeys :: [PublicKey]
+      }
+  | ChangeKeysMultisig
       { threshold :: Natural
       , newSignerKeys :: [PublicKey]
       , targetContract :: Address
@@ -289,7 +359,7 @@ data CmdLnArgs
       , signatures :: Maybe [Maybe Signature]
       , signerKeys :: [PublicKey]
       }
-  | RunSpecialized
+  | RunMultisig
       { contractParameter :: SomeContractParam
       , targetContract :: Address
       , multisigContract :: Address
@@ -297,21 +367,17 @@ data CmdLnArgs
       , signatures :: Maybe [Maybe Signature]
       , signerKeys :: [PublicKey]
       }
-  -- | PrintWrapper
-  --     { parameterType :: SomeSing T
-  --     , storageType :: SomeSing T
-  --     , outputPath :: Maybe FilePath
-  --     , oneline :: Bool
-  --     }
 
 argParser :: Opt.Parser CmdLnArgs
 argParser = Opt.hsubparser $ mconcat
   [ printSpecializedSubCmd
+  , printWrappedSubCmd
   , initSpecializedSubCmd
+  , initWrappedSubCmd
   , getCounterSpecializedSubCmd
-  , changeKeysSpecializedSubCmd
-  , runSpecializedSubCmd
-  -- , printWrapperSubCmd
+  , getCounterWrappedSubCmd
+  , changeKeysMultisigSubCmd
+  , runMultisigSubCmd
   ]
   where
     mkCommandParser commandName parser desc =
@@ -324,6 +390,15 @@ argParser = Opt.hsubparser $ mconcat
       (PrintSpecialized <$> parseSomeT "parameter" <*> outputOptions <*> onelineOption)
       "Dump the Specialized Multisig contract in form of Michelson code"
 
+    printWrappedSubCmd =
+      mkCommandParser "print-specialized"
+      (PrintWrapped <$>
+        parseSomeContract "contractToWrap" <*>
+        outputOptions <*>
+        onelineOption
+      )
+      "Dump the Wrapped Multisig contract in form of Michelson code"
+
     initSpecializedSubCmd =
       mkCommandParser "init-specialized"
       (InitSpecialized <$>
@@ -331,6 +406,15 @@ argParser = Opt.hsubparser $ mconcat
         parseSignerKeys "signerKeys"
       )
       "Dump the intial storage for the Specialized Multisig contract"
+
+    initWrappedSubCmd =
+      mkCommandParser "init-specialized"
+      (InitWrapped <$>
+        parseSomeContractStorage "targetStorage" <*>
+        parseNatural "threshold" <*>
+        parseSignerKeys "signerKeys"
+      )
+      "Dump the intial storage for the Wrapped Multisig contract"
 
     getCounterSpecializedSubCmd =
       mkCommandParser "get-counter-specialized"
@@ -342,9 +426,20 @@ argParser = Opt.hsubparser $ mconcat
        "ensure the 'signerKeys' match, " <>
        "and return the current counter")
 
-    changeKeysSpecializedSubCmd =
-      mkCommandParser "change-keys-specialized"
-      (ChangeKeysSpecialized <$>
+    getCounterWrappedSubCmd =
+      mkCommandParser "get-counter-specialized"
+      (GetCounterWrapped <$>
+        parseSomeT "storage" <*>
+        fmap T.pack (parseString "storageText") <*>
+        parseSignerKeys "signerKeys"
+      )
+      ("Parse the storage for the Wrapped Multisig contract, " <>
+       "ensure the 'signerKeys' match, " <>
+       "and return the current counter")
+
+    changeKeysMultisigSubCmd =
+      mkCommandParser "change-keys-multisig"
+      (ChangeKeysMultisig <$>
         parseNatural "threshold" <*>
         parseSignerKeys "newSignerKeys" <*>
         parseAddress "target-contract" <*>
@@ -353,11 +448,11 @@ argParser = Opt.hsubparser $ mconcat
         parseSignatures "signatures" <*>
         parseSignerKeys "signerKeys"
       )
-      "Dump the change keys parameter for the Specialized Multisig contract"
+      "Dump the change keys parameter for the Specialized or Wrapped Multisig contract"
 
-    runSpecializedSubCmd =
-      mkCommandParser "run-specialized"
-      (RunSpecialized <$>
+    runMultisigSubCmd =
+      mkCommandParser "run-multisig"
+      (RunMultisig <$>
         parseSomeContractParam "target-parameter" <*>
         parseAddress "target-contract" <*>
         parseAddress "multisig-contract" <*>
@@ -365,12 +460,8 @@ argParser = Opt.hsubparser $ mconcat
         parseSignatures "signatures" <*>
         parseSignerKeys "signerKeys"
       )
-      "Dump the run operation parameter for the Specialized Multisig contract"
+      "Dump the run operation parameter for the Specialized or Wrapped Multisig contract"
 
---     printWrapperSubCmd =
---       mkCommandParser "print-wrapper"
---       (PrintWrapper <$> parseSomeT "parameter" <*> parseSomeT "storage" <*> outputOptions <*> onelineOption)
---       "Dump the Specialized Multisig contract in form of Michelson code"
 
 infoMod :: Opt.InfoMod CmdLnArgs
 infoMod = mconcat
@@ -389,6 +480,16 @@ runCmdLnArgs = \case
     maybe TL.putStrLn writeFileUtf8 mOutput $
     printLorentzContract forceOneLine' $
     GenericMultisig.specializedMultisigContract @(Value t) @PublicKey
+  PrintWrapped wrappedContract mOutput oneline ->
+    case wrappedContract of
+      TypeCheck.SomeContract wrappedContractFC ->
+        case wrappedContractFC of
+          FullContract wrappedContractCode (_ :: ParamNotes cp) (_ :: Notes st) ->
+            assertBigMapAbsense @cp $
+            maybe TL.putStrLn writeFileUtf8 mOutput $
+            printLorentzContract oneline $
+            GenericMultisig.genericMultisigContractWrapper @(Value cp) @(Value st) @PublicKey
+            (I wrappedContractCode)
   InitSpecialized {..} ->
     if threshold > genericLength signerKeys
        then error "threshold is greater than the number of signer keys"
@@ -399,6 +500,16 @@ runCmdLnArgs = \case
            , signerKeys
            )
          )
+  InitWrapped (SomeContractStorage (initialWrappedStorage :: Value st)) threshold' signerKeys' ->
+    TL.putStrLn $
+    printLorentzValue @(Value st, GenericMultisig.Storage PublicKey) forceOneLine $
+    ( initialWrappedStorage
+    , ( GenericMultisig.initialMultisigCounter
+      , ( threshold'
+        , signerKeys'
+        )
+      )
+    )
   GetCounterSpecialized {..} ->
     let parsedStorage = parseNoEnv
           (G.parseTypeCheckValue @(ToT (GenericMultisig.Storage PublicKey)))
@@ -415,7 +526,25 @@ runCmdLnArgs = \case
                  putStrLn @Text "Stored signer keys:"
                  print signerKeys
                  error "Stored signer keys do not match provided signer keys"
-  ChangeKeysSpecialized {..} ->
+  GetCounterWrapped (SomeSing (st :: Sing t)) storageText' signerKeys' ->
+    withDict (singIT st) $
+    withDict (singTypeableT st) $
+    let parsedStorage = parseNoEnv
+          (G.parseTypeCheckValue @(ToT (Value t, GenericMultisig.Storage PublicKey)))
+          "specialized-multisig"
+          storageText'
+     in let (_, (storedCounter, (_threshold, storedSignerKeys))) =
+              either
+                (error . T.pack . show)
+                (fromVal @(Value t, GenericMultisig.Storage PublicKey))
+                parsedStorage
+         in if storedSignerKeys == signerKeys'
+               then print storedCounter
+               else do
+                 putStrLn @Text "Stored signer keys:"
+                 print signerKeys'
+                 error "Stored signer keys do not match provided signer keys"
+  ChangeKeysMultisig {..} ->
     let changeKeysParam = (counter, GenericMultisig.ChangeKeys @PublicKey @((), ContractRef ()) (threshold, newSignerKeys)) in
     if threshold > genericLength newSignerKeys
        then error "threshold is greater than the number of signer keys"
@@ -430,7 +559,7 @@ runCmdLnArgs = \case
                  asParameterType $
                  (changeKeysParam, someSignatures)
                else error "invalid signature(s) provided"
-  RunSpecialized {..} ->
+  RunMultisig {..} ->
     case contractParameter of
       SomeContractParam (param :: Value cp) _ (Dict, Dict) ->
         assertNestedBigMapsAbsense @cp $
@@ -453,15 +582,6 @@ runCmdLnArgs = \case
 
     asPackType :: forall cp. (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey cp)) -> (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey cp))
     asPackType = id
-
-  -- PrintWrapper (SomeSing (st1 :: Sing t1)) (SomeSing (st2 :: Sing t2)) mOutput forceOneLine ->
-  --   withDict (singIT st) $
-  --   withDict (singTypeableT st) $
-  --   -- assertOpAbsense @t $
-  --   -- assertBigMapAbsense @t $
-  --   -- withDict (compareOpCT @(ToCT (Value t))) $
-  --   maybe TL.putStrLn writeFileUtf8 mOutput $
-  --   printLorentzContract forceOneLine (GenericMultisig.genericMultisigContractWrapper @(Value t1) @(Value t2) @PublicKey)
 
 checkSignaturesValid :: NicePackedValue cp => (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey (cp, ContractRef cp))) -> [(PublicKey, Maybe Signature)] -> Bool
 checkSignaturesValid = all . checkSignatureValid
