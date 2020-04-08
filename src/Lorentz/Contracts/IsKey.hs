@@ -8,7 +8,8 @@
 module Lorentz.Contracts.IsKey where
 
 import Lorentz hiding (concat)
-import Lorentz.Contracts.Util ()
+-- import Lorentz.Contracts.Util ()
+import Tezos.Crypto.Orphans ()
 import Michelson.Typed.Scope
 import qualified Tezos.Crypto as Crypto
 import qualified Tezos.Crypto.Ed25519 as Ed25519

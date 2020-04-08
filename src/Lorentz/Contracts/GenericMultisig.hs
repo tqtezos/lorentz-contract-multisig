@@ -22,7 +22,7 @@
 module Lorentz.Contracts.GenericMultisig where
 
 import Lorentz hiding (concat)
-import Lorentz.Contracts.Util ()
+-- import Lorentz.Contracts.Util ()
 import Michelson.Typed.Scope
 
 import Lorentz.Contracts.IsKey
@@ -53,7 +53,7 @@ assertNoTokensSent = do
 
 -- | Pair the payload with the current contract address, to ensure signatures
 -- | can't be replayed accross different contracts if a key is reused.
-preparePayload :: forall key a b c s p. (IsKey key, NicePackedValue a, NiceParameter p)
+preparePayload :: forall key a b c s p. (IsKey key, NicePackedValue a, NiceParameterFull p)
   => Proxy p
   -> (((Natural, GenericMultisigAction key a), b) & (c & s)) :-> (c & (Natural & (ByteString & (b & (GenericMultisigAction key a & (c & s))))))
 preparePayload _ = do
@@ -71,7 +71,8 @@ preparePayload _ = do
   --   } ;
   dip $ do
     unpair
-    dup >> self @p >> address >> pair
+    dup >> selfCalling @p CallDefault >> address >> pair
+      -- self @p
     pack @(Address, (Natural, GenericMultisigAction key a))
     dip (unpair @Natural >> dip swap) >> swap
 
@@ -178,7 +179,7 @@ incrementAndStoreCounter = do
     pair
 
 multisigSetup ::
-     forall key a p. (IsKey key, NicePackedValue a, NiceParameter p)
+     forall key a p. (IsKey key, NicePackedValue a, NiceParameterFull p)
   => Proxy p
   -> (((Natural, GenericMultisigAction key a), [Maybe (Sig key)]) & (( Natural
                                                                      , ( Natural
@@ -201,7 +202,7 @@ multisigSetup p = do
 -- - It accepts a `Lambda` from @(a, b)@ to a list of `Operation`s:
 --   this is a static method of extending the contract
 genericMultisigContractMain :: forall a b key p.
-     (IsKey key, NicePackedValue a, NiceParameter p)
+     (IsKey key, NicePackedValue a, NiceParameterFull p)
   => Proxy p
   -- -> (b & (a & '[])) :-> (List Operation & '[])
   -> (a & (b & '[])) :-> (List Operation & b & '[])
@@ -236,9 +237,9 @@ genericMultisigContractMain p runParam = do
 -- | Given a method to run the parameter type, create a
 -- multisig version of the method.
 genericMultisigContract ::
-     forall a b key p. (IsKey key, NicePackedValue a, NiceParameter p)
+     forall a b key p. (IsKey key, NicePackedValue a, NiceParameterFull p)
   => Proxy p
-  -> (a & (b & '[])) :-> ([Operation] & b & '[]) -> Contract (Parameter key a) (b, Storage key)
+  -> (a & (b & '[])) :-> ([Operation] & b & '[]) -> ContractCode (Parameter key a) (b, Storage key)
 genericMultisigContract p runParam = do
   unpair
   caseT @(Parameter key a)
@@ -255,9 +256,9 @@ genericMultisigContract p runParam = do
     )
 
 genericMultisigContractWrapper ::
-     forall a b key. (IsKey key, NicePackedValue a, ForbidNestedBigMaps (ToT a))
-  => Contract a b
-  -> Contract (Parameter key a) (b, Storage key)
+     forall a b key. (IsKey key, NicePackedValue a, ForbidNestedBigMaps (ToT a), Typeable a, ParameterHasEntryPoints (Parameter key a))
+  => ContractCode a b
+  -> ContractCode (Parameter key a) (b, Storage key)
 genericMultisigContractWrapper wrappedContract =
   genericMultisigContract @a @b @key (Proxy @(Parameter key a)) $ do
     pair
@@ -269,7 +270,7 @@ genericMultisigContractWrapper wrappedContract =
 -- - It stores an additional parameter: @b@
 -- - It accepts a `Lambda` from @(a, b)@ to a list of `Operation`s:
 --   this is a static method of extending the contract
-genericMultisigContractSimpleStorageMain :: forall a key p. (IsKey key, NicePackedValue a, NiceParameter p)
+genericMultisigContractSimpleStorageMain :: forall a key p. (IsKey key, NicePackedValue a, Typeable a, NiceParameterFull p)
   => Proxy p
   -> (a & '[]) :-> ([Operation] & '[])
   -> '[ MainParams key a, Storage key] :-> '[ ([Operation], Storage key)]
@@ -297,9 +298,9 @@ genericMultisigContractSimpleStorageMain p runParam = do
 -- | Given a method to run the parameter type, create a
 -- multisig version of the method.
 genericMultisigContractSimpleStorage ::
-     forall a key p. (IsKey key, NicePackedValue a, NiceParameter p)
+     forall a key p. (IsKey key, NicePackedValue a, Typeable a, NiceParameterFull p)
   => Proxy p
-  -> (a & '[]) :-> ([Operation] & '[]) -> Contract (Parameter key a) (Storage key)
+  -> (a & '[]) :-> ([Operation] & '[]) -> ContractCode (Parameter key a) (Storage key)
 genericMultisigContractSimpleStorage p runParam = do
   unpair
   caseT @(Parameter key a)
@@ -315,8 +316,14 @@ genericMultisigContractSimpleStorage p runParam = do
 -- | `genericMultisigContractSimpleStorage` specialized to accept
 -- a contract call of a particular type, sans `Mutez`
 specializedMultisigContract ::
-     forall a key. (IsKey key, NicePackedValue a, ForbidNestedBigMaps (ToT a))
-  => Contract (Parameter key (a, ContractRef a)) (Storage key)
+     forall a key.
+     ( IsKey key
+     , NicePackedValue a
+     , ForbidNestedBigMaps (ToT a)
+     , Typeable a
+     , ParameterHasEntryPoints (Parameter key (a, ContractRef a))
+     )
+  => ContractCode (Parameter key (a, ContractRef a)) (Storage key)
 specializedMultisigContract =
   genericMultisigContractSimpleStorage @(a, ContractRef a) @key (Proxy @(Parameter key (a, ContractRef a))) $ do
     unpair
@@ -328,7 +335,7 @@ specializedMultisigContract =
 
 -- | Generic multisig contract with pairs of keys representing "individual" signers
 generigMultisigContract223 ::
-  Contract
+  ContractCode
     (Parameter (PublicKey, PublicKey) (Lambda () [Operation]))
     (Storage (PublicKey, PublicKey))
 generigMultisigContract223 =

@@ -1,6 +1,6 @@
 {-# OPTIONS -Wno-missing-export-lists #-}
 
-module Lorentz.Contracts.GenericMultisig.Wrapper {-# WARNING "This module hasn't been updated since Athens" #-} where
+module Lorentz.Contracts.GenericMultisig.Wrapper where
 
 import Data.Singletons
 import qualified Data.Text.Lazy as L
@@ -43,11 +43,11 @@ type StorageParamsParser = (Parser SomeContractParam, Natural -> [PublicKey] -> 
 
 -- | Parse and typecheck a Michelson value
 parseTypeCheckValue ::
-     forall t. (Typeable t, SingI t)
+     forall t. (SingI t)
   => Parser (Value t)
 parseTypeCheckValue =
   (>>= either (fail . show) return) $
-  runTypeCheckIsolated . flip runReaderT def . typeVerifyValue . expandValue <$>
+  runTypeCheckIsolated . flip runReaderT def . typeCheckValue . expandValue <$>
   (value <* eof)
 
 

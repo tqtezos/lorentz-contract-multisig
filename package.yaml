@@ -22,6 +22,7 @@ library:
     - data-default
     - fmt
     - morley
+    - lorentz
     - morley-prelude
     - morley-ledgers
     - named
@@ -33,7 +34,7 @@ library:
     - aeson
     - constraints
     - binary
-    - lorentz-contract-param
+    # - lorentz-contract-param
     - optparse-applicative
     - transformers
     - megaparsec
