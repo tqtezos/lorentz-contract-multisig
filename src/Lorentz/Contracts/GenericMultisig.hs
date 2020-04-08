@@ -7,6 +7,7 @@
 {-# OPTIONS -Wno-unused-do-bind #-}
 
 -- | To use the contract:
+--
 -- @
 --  stack build
 --  stack exec -- lorentz-contracts print --name MultisigManagedLedgerAthens -o MultisigManagedLedgerAthens.tz
@@ -17,8 +18,8 @@
 --  alpha-client get balance for fred
 --  FRED_ADDRESS="tz1RwoEdg4efDQHarsw6aKtMUYvg278Gv1ir"
 --  _
---
 -- @
+--
 module Lorentz.Contracts.GenericMultisig where
 
 import Lorentz hiding (concat)
@@ -272,7 +273,7 @@ genericMultisigContractWrapper wrappedContract =
 -- - It stores an additional parameter: @b@
 -- - It accepts a `Lambda` from @(a, b)@ to a list of `Operation`s:
 --   this is a static method of extending the contract
-genericMultisigContractSimpleStorageMain :: forall a key p. (IsKey key, NicePackedValue a, Typeable a, NiceParameterFull p)
+genericMultisigContractSimpleStorageMain :: forall a key p. (IsKey key, NicePackedValue a, NiceParameterFull p)
   => Proxy p
   -> (a & '[]) :-> ([Operation] & '[])
   -> '[ MainParams key a, Storage key] :-> '[ ([Operation], Storage key)]
@@ -300,7 +301,7 @@ genericMultisigContractSimpleStorageMain p runParam = do
 -- | Given a method to run the parameter type, create a
 -- multisig version of the method.
 genericMultisigContractSimpleStorage ::
-     forall a key p. (IsKey key, NicePackedValue a, Typeable a, NiceParameterFull p)
+     forall a key p. (IsKey key, NicePackedValue a, NiceParameterFull p)
   => Proxy p
   -> (a & '[]) :-> ([Operation] & '[]) -> ContractCode (Parameter key a) (Storage key)
 genericMultisigContractSimpleStorage p runParam = do

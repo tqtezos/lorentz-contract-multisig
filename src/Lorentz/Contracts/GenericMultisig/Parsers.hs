@@ -1,13 +1,13 @@
+{-# OPTIONS -Wno-orphans -Wno-missing-export-lists #-}
 
 module Lorentz.Contracts.GenericMultisig.Parsers where
 
-import Prelude (FilePath, ($), Natural, error) -- hiding ((>>), fail)
+import Prelude (FilePath, ($), Natural, error)
 import Data.Char
 import Data.Bool
 import Data.Either
 import Data.String
 import Data.Maybe
--- import Data.Semigroup
 import Data.Monoid
 import Data.Functor
 import Control.Applicative
@@ -26,7 +26,7 @@ import qualified Tezos.Crypto.Secp256k1 as Secp256k1
 import qualified Tezos.Crypto.P256 as P256
 
 import qualified Tezos.Address as Tezos
-import Lorentz (PublicKey, Address, View(..), GetDefaultEntryPointArg, NiceParameterFull, TAddress(..), callingDefTAddress) -- hiding ((>>))
+import Lorentz (PublicKey, Address, View(..), GetDefaultEntryPointArg, NiceParameterFull, TAddress(..), callingDefTAddress)
 import Michelson.Typed.T
 import qualified Michelson.TypeCheck.Types as TypeCheck
 import Michelson.Typed.Annotation
@@ -107,10 +107,10 @@ parseAddress name =
     , Opt.help $ "Address of the " <> name <> "."
     ]
 
--- -- | Parse an address which can be suffixed with entrypoint name
--- -- (e.g. "tz1faswCTDciRzE4oJ9jn2Vm2dvjeyA9fUzU%entrypoint").
--- parseEpAddress :: Text -> Either ParseEpAddressError EpAddress
-
+-- | Parse an address which can be suffixed with entrypoint name
+-- (e.g. "tz1faswCTDciRzE4oJ9jn2Vm2dvjeyA9fUzU%entrypoint").
+--
+-- See `EntryPoints.parseEpAddress`
 instance Read EpAddress where
   readPrec = do
     str <- readPrec
@@ -118,6 +118,7 @@ instance Read EpAddress where
       Left err -> fail $ show err
       Right result' -> return result'
 
+-- | See `EntryPoints.parseEpAddress`
 parseEpAddress :: String -> Opt.Parser EpAddress
 parseEpAddress name =
   Opt.option Opt.auto $

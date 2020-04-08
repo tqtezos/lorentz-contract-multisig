@@ -3,12 +3,11 @@
 {-# LANGUAGE RebindableSyntax #-}
 
 {-# OPTIONS -Wno-missing-export-lists #-}
-{-# OPTIONS -Wno-orphans #-}
+{-# OPTIONS -Wno-unused-do-bind #-}
 
 module Lorentz.Contracts.IsKey where
 
 import Lorentz hiding (concat)
--- import Lorentz.Contracts.Util ()
 import Tezos.Crypto.Orphans ()
 import Michelson.Typed.Scope
 import qualified Tezos.Crypto as Crypto
@@ -23,8 +22,6 @@ import Data.Kind
 import qualified GHC.Base as Base
 import qualified Control.Monad as Monad
 
-
--- {-# ANN module ("HLint: ignore Reduce duplication" :: Text) #-}
 
 -- | Some `Public` key
 data SomePublicKey where

@@ -7,8 +7,6 @@
 module Lorentz.Contracts.GenericMultisig.Type where
 
 import Lorentz hiding (concat)
-import Michelson.Typed.Annotation
--- import Lorentz.Contracts.Util ()
 
 import Lorentz.Contracts.IsKey
 
@@ -30,7 +28,7 @@ import Text.Show (Show(..))
 --                        (lambda %operation unit (list operation))
 --                        (pair %change_keys          # change the keys controlling the multisig
 --                           (nat %threshold)         # new threshold
---                           (list %keys key))))     # new list of keys
+--                           (list %keys key))))      # new list of keys
 --                  (list %sigs (option signature))));    # signatures
 
 -- | @(threshold, keys)@
@@ -95,22 +93,6 @@ instance (HasTypeAnn a, IsoValue a) => ParameterHasEntryPoints (Parameter Public
 
 instance (HasTypeAnn a, IsoValue a) => ParameterHasEntryPoints (Parameter (PublicKey, PublicKey) a) where
   type ParameterEntryPointsDerivation (Parameter (PublicKey, PublicKey) a) = EpdRecursive
-
-
--- instance NiceParameter a => ParameterEntryPoints (Parameter PublicKey a) where
---   parameterEntryPoints = ParameterEntryPointsSplit $
---     case pepRecursive @(Parameter PublicKey ()) of
---       ParameterEntryPointsSplit xs ->
---         case xs of
---           NTOr ta tb tc ys zs ->
---             case zs of
---               NTPair ta' tb' tc' as bs ->
---                 case as of
---                   NTPair ta'' tb'' tc'' as' bs' ->
---                     case bs' of
---                       NTOr ta''' tb''' tc''' _ bs'' ->
---                         NTOr ta tb tc ys $
---                         NTPair ta' tb' tc' (NTPair ta'' tb'' tc'' as' (NTOr ta''' tb''' tc''' starNotes bs'')) bs
 
 ----------------------------------------------------------------------------
 -- Storage

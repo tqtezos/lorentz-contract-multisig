@@ -1,8 +1,7 @@
-{-# OPTIONS -Wno-partial-fields -Wno-orphans #-}
+{-# OPTIONS -Wno-missing-export-lists -Wno-partial-fields -Wno-orphans #-}
 
 module Lorentz.Contracts.GenericMultisig.CmdLnArgs where
 
-import Control.Monad (Monad(..))
 import Control.Applicative
 import Text.Show (Show(..))
 import Data.List
@@ -11,10 +10,8 @@ import Data.Either
 import Data.Function (id)
 import Data.Functor
 import Prelude (FilePath, IO, Ord(..), print, putStrLn)
-import Data.String (String)
 import Data.Maybe
 import Data.Typeable
-import Data.Type.Bool
 
 import Lorentz hiding (checkSignature, get)
 import Michelson.Parser
@@ -23,15 +20,11 @@ import Michelson.Typed.Haskell.Value
 import Michelson.Typed.Scope
 import Michelson.Typed.Sing
 import Michelson.Typed.T
-import Michelson.Typed.Value
 import Michelson.Typed.Instr
 import Michelson.Typed.EntryPoints hiding (parseEpAddress)
 import Util.IO
-import qualified Michelson.Untyped.Type as U
 import Tezos.Crypto (checkSignature)
 import qualified Michelson.TypeCheck.Types as TypeCheck
-import Michelson.Macro
-import Michelson.TypeCheck.Instr
 
 import qualified Options.Applicative as Opt
 import qualified Data.Text as T
@@ -39,21 +32,16 @@ import qualified Data.Text.Lazy.IO as TL
 import qualified Data.ByteString.Base16 as Base16
 import Data.Constraint
 import Data.Singletons
-import Text.Megaparsec (parse)
 
 import Lorentz.Contracts.GenericMultisig.Parsers
-import Michelson.Typed.Value.Missing
+import Michelson.Typed.Value.Missing ()
 import Michelson.Typed.Sing.Missing
--- import Lorentz.Contracts.Util ()
 import Lorentz.Contracts.SomeContractParam
 import Lorentz.Contracts.SomeContractStorage
--- import Lorentz.Contracts.Parse
 import qualified Lorentz.Contracts.GenericMultisig.Wrapper as G (parseTypeCheckValue)
 
 import qualified Lorentz.Contracts.GenericMultisig as GenericMultisig
 import qualified Lorentz.Contracts.GenericMultisig.Type as GenericMultisig
-
--- unsafeRootContractRef ::
 
 -- | Assume that the given `EpAddress` points to the contract root
 unsafeRootContractRef :: ParameterScope cp => EpAddress -> ContractRef (Value cp)
@@ -69,16 +57,6 @@ unsafeRootContractRef EpAddress{..} =
 
 instance (SingI t) => ParameterHasEntryPoints (Value t) where
   type ParameterEntryPointsDerivation (Value t) = EpdNone
-
--- unsafeIfEq :: Proxy b -> Proxy x -> If b x x :~: x
-
--- valueContractRef :: forall cp. Address -> ContractRef (Value cp)
--- valueContractRef addr' = _ (toTAddress @(Value cp) addr') -- CallDefault
-
--- instance IsoCValue (Value ('Tc ct)) where
---   type ToCT (Value ('Tc ct)) = ct
---   toCVal (VC xs) = xs
---   fromCVal = VC
 
 -- type IsComparable c = ToT c ~ 'Tc (ToCT c)
 assertIsComparable ::
