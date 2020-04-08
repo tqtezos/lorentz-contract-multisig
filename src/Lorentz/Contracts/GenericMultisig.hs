@@ -255,6 +255,8 @@ genericMultisigContract p runParam = do
       genericMultisigContractMain p runParam
     )
 
+-- | Given a contract, produce a multisig-wrapped contract, i.e. one where
+-- each operation must be signed by at least the threshold number of signers
 genericMultisigContractWrapper ::
      forall a b key. (IsKey key, NicePackedValue a, ForbidNestedBigMaps (ToT a), Typeable a, ParameterHasEntryPoints (Parameter key a))
   => ContractCode a b
