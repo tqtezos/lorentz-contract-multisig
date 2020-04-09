@@ -7,8 +7,6 @@
 module Lorentz.Contracts.GenericMultisig.Type where
 
 import Lorentz hiding (concat)
-import Michelson.Typed.Annotation
--- import Lorentz.Contracts.Util ()
 
 import Lorentz.Contracts.IsKey
 
@@ -30,7 +28,7 @@ import Text.Show (Show(..))
 --                        (lambda %operation unit (list operation))
 --                        (pair %change_keys          # change the keys controlling the multisig
 --                           (nat %threshold)         # new threshold
---                           (list %keys key))))     # new list of keys
+--                           (list %keys key))))      # new list of keys
 --                  (list %sigs (option signature))));    # signatures
 
 -- | @(threshold, keys)@
@@ -54,6 +52,9 @@ data GenericMultisigAction key a
 deriving instance (IsKey key, Read a) => Read (GenericMultisigAction key a)
 deriving instance (IsKey key, Show a) => Show (GenericMultisigAction key a)
 deriving instance (IsKey key, IsoValue a) => IsoValue (GenericMultisigAction key a)
+
+instance (HasTypeAnn a, IsoValue a) => HasTypeAnn (GenericMultisigAction PublicKey a)
+instance (HasTypeAnn a, IsoValue a) => HasTypeAnn (GenericMultisigAction (PublicKey, PublicKey) a)
 
 -- | @((counter, action), sigs)@
 --
@@ -85,20 +86,13 @@ deriving instance (IsKey key, Show a) => Show (Parameter key a)
 deriving instance (IsKey key, IsoValue a) => IsoValue (Parameter key a)
 
 -- | Since `HasTypeAnn` isn't public, each case of @key@ needs to be provided individually
-instance NiceParameter a => ParameterEntryPoints (Parameter PublicKey a) where
-  parameterEntryPoints = ParameterEntryPointsSplit $
-    case pepRecursive @(Parameter PublicKey ()) of
-      ParameterEntryPointsSplit xs ->
-        case xs of
-          NTOr ta tb tc ys zs ->
-            case zs of
-              NTPair ta' tb' tc' as bs ->
-                case as of
-                  NTPair ta'' tb'' tc'' as' bs' ->
-                    case bs' of
-                      NTOr ta''' tb''' tc''' _ bs'' ->
-                        NTOr ta tb tc ys $
-                        NTPair ta' tb' tc' (NTPair ta'' tb'' tc'' as' (NTOr ta''' tb''' tc''' starNotes bs'')) bs
+
+-- (IsoValue a, HasTypeAnn a) =>
+instance (HasTypeAnn a, IsoValue a) => ParameterHasEntryPoints (Parameter PublicKey a) where
+  type ParameterEntryPointsDerivation (Parameter PublicKey a) = EpdRecursive
+
+instance (HasTypeAnn a, IsoValue a) => ParameterHasEntryPoints (Parameter (PublicKey, PublicKey) a) where
+  type ParameterEntryPointsDerivation (Parameter (PublicKey, PublicKey) a) = EpdRecursive
 
 ----------------------------------------------------------------------------
 -- Storage

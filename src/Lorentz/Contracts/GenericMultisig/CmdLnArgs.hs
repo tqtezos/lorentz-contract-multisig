@@ -1,8 +1,7 @@
-{-# OPTIONS -Wno-partial-fields -Wno-orphans #-}
+{-# OPTIONS -Wno-missing-export-lists -Wno-partial-fields -Wno-orphans #-}
 
 module Lorentz.Contracts.GenericMultisig.CmdLnArgs where
 
-import Control.Monad (Monad(..))
 import Control.Applicative
 import Text.Show (Show(..))
 import Data.List
@@ -11,7 +10,6 @@ import Data.Either
 import Data.Function (id)
 import Data.Functor
 import Prelude (FilePath, IO, Ord(..), print, putStrLn)
-import Data.String (String)
 import Data.Maybe
 import Data.Typeable
 
@@ -22,15 +20,11 @@ import Michelson.Typed.Haskell.Value
 import Michelson.Typed.Scope
 import Michelson.Typed.Sing
 import Michelson.Typed.T
-import Michelson.Typed.Value
 import Michelson.Typed.Instr
-import Michelson.Typed.EntryPoints
+import Michelson.Typed.EntryPoints hiding (parseEpAddress)
 import Util.IO
-import qualified Michelson.Untyped.Type as U
 import Tezos.Crypto (checkSignature)
 import qualified Michelson.TypeCheck.Types as TypeCheck
-import Michelson.Macro
-import Michelson.TypeCheck.Instr
 
 import qualified Options.Applicative as Opt
 import qualified Data.Text as T
@@ -38,44 +32,31 @@ import qualified Data.Text.Lazy.IO as TL
 import qualified Data.ByteString.Base16 as Base16
 import Data.Constraint
 import Data.Singletons
-import Text.Megaparsec (parse)
 
-import Lorentz.Contracts.Util ()
+import Lorentz.Contracts.GenericMultisig.Parsers
+import Michelson.Typed.Value.Missing ()
+import Michelson.Typed.Sing.Missing
 import Lorentz.Contracts.SomeContractParam
-import Lorentz.Contracts.Parse
+import Lorentz.Contracts.SomeContractStorage
 import qualified Lorentz.Contracts.GenericMultisig.Wrapper as G (parseTypeCheckValue)
 
 import qualified Lorentz.Contracts.GenericMultisig as GenericMultisig
 import qualified Lorentz.Contracts.GenericMultisig.Type as GenericMultisig
 
-instance IsoCValue (Value ('Tc ct)) where
-  type ToCT (Value ('Tc ct)) = ct
-  toCVal (VC xs) = xs
-  fromCVal = VC
+-- | Assume that the given `EpAddress` points to the contract root
+unsafeRootContractRef :: ParameterScope cp => EpAddress -> ContractRef (Value cp)
+unsafeRootContractRef EpAddress{..} =
+  ContractRef eaAddress $
+  SomeEpc $ EntryPointCall
+  { epcName = eaEntryPoint
+  , epcParamProxy = Proxy
+  , epcLiftSequence = EplArgHere
+  }
 
-assertOpAbsense :: forall (t :: T) a. SingI t => (HasNoOp t => a) -> a
-assertOpAbsense f =
-  case opAbsense (sing @t) of
-    Nothing -> error "assertOpAbsense"
-    Just Dict -> forbiddenOp @t f
 
-assertContractAbsense :: forall (t :: T) a. SingI t => (HasNoContract t => a) -> a
-assertContractAbsense f =
-  case contractTypeAbsense (sing @t) of
-    Nothing -> error "assertContractAbsense"
-    Just Dict -> forbiddenContractType @t f
 
-assertBigMapAbsense :: forall (t :: T) a. SingI t => (HasNoBigMap t => a) -> a
-assertBigMapAbsense f =
-  case bigMapAbsense (sing @t) of
-    Nothing -> error "assertBigMapAbsense"
-    Just Dict -> forbiddenBigMap @t f
-
-assertNestedBigMapsAbsense :: forall (t :: T) a. SingI t => (HasNoNestedBigMaps t => a) -> a
-assertNestedBigMapsAbsense f =
-  case nestedBigMapsAbsense (sing @t) of
-    Nothing -> error "assertNestedBigMapsAbsense"
-    Just Dict -> forbiddenNestedBigMaps @t f
+instance (SingI t) => ParameterHasEntryPoints (Value t) where
+  type ParameterEntryPointsDerivation (Value t) = EpdNone
 
 -- type IsComparable c = ToT c ~ 'Tc (ToCT c)
 assertIsComparable ::
@@ -90,236 +71,6 @@ assertIsComparable f =
   case sing @t of
     STc _ -> f
     _ -> error "assertIsComparable"
-
-data SomeContractStorage where
-  SomeContractStorage :: (NiceStorage (Value a))
-    => Value a
-    -> SomeContractStorage
-
-fromSomeContractStorage :: forall b. SomeContractStorage -> (forall a. NiceStorage (Value a) => Value a -> b) -> b
-fromSomeContractStorage (SomeContractStorage xs) f = f xs
-
-parseSomeContractStorage :: String -> Opt.Parser SomeContractStorage
-parseSomeContractStorage name =
-  (\(SomeSing (st :: Sing t)) paramStr ->
-    withDict (singIT st) $
-    withDict (singTypeableT st) $
-    assertOpAbsense @t $
-    assertContractAbsense @t $
-    assertBigMapAbsense @t $
-    assertNestedBigMapsAbsense @t $
-    let parsedParam = parseNoEnv
-          (G.parseTypeCheckValue @t)
-          name
-          paramStr
-     in let param = either (error . T.pack . show) id parsedParam
-     in SomeContractStorage param
-  ) <$>
-  parseSomeT name <*>
-  Opt.strOption @Text
-    (mconcat
-      [ Opt.long name
-      , Opt.metavar "Michelson Value"
-      , Opt.help $ "The Michelson Value: " ++ name
-      ])
-
-singTypeableCT :: forall (t :: CT). Sing t -> Dict (Typeable t)
-singTypeableCT SCInt = Dict
-singTypeableCT SCNat = Dict
-singTypeableCT SCString = Dict
-singTypeableCT SCBytes = Dict
-singTypeableCT SCMutez = Dict
-singTypeableCT SCBool = Dict
-singTypeableCT SCKeyHash = Dict
-singTypeableCT SCTimestamp = Dict
-singTypeableCT SCAddress = Dict
-
-singTypeableT :: forall (t :: T). Sing t -> Dict (Typeable t)
-singTypeableT (STc ct) =
-  withDict (singTypeableCT ct) $
-  Dict
-singTypeableT STKey = Dict
-singTypeableT STUnit = Dict
-singTypeableT STSignature = Dict
-singTypeableT STChainId = Dict
-singTypeableT (STOption st) =
-  withDict (singTypeableT st) $
-  Dict
-singTypeableT (STList st) =
-  withDict (singTypeableT st) $
-  Dict
-singTypeableT (STSet st) =
-  withDict (singTypeableCT st) $
-  Dict
-singTypeableT STOperation  = Dict
-singTypeableT (STContract st) =
-  withDict (singTypeableT st) $
-  Dict
-singTypeableT (STPair st su) =
-  withDict (singTypeableT st) $
-  withDict (singTypeableT su) $
-  Dict
-singTypeableT (STOr st su) =
-  withDict (singTypeableT st) $
-  withDict (singTypeableT su) $
-  Dict
-singTypeableT (STLambda st su) =
-  withDict (singTypeableT st) $
-  withDict (singTypeableT su) $
-  Dict
-singTypeableT (STMap st su) =
-  withDict (singTypeableCT st) $
-  withDict (singTypeableT su) $
-  Dict
-singTypeableT (STBigMap st su) =
-  withDict (singTypeableCT st) $
-  withDict (singTypeableT su) $
-  Dict
-
-singICT :: forall (t :: CT). Sing t -> Dict (SingI t)
-singICT SCInt = Dict
-singICT SCNat = Dict
-singICT SCString = Dict
-singICT SCBytes = Dict
-singICT SCMutez = Dict
-singICT SCBool = Dict
-singICT SCKeyHash = Dict
-singICT SCTimestamp = Dict
-singICT SCAddress = Dict
-
-singIT :: forall (t :: T). Sing t -> Dict (SingI t)
-singIT (STc ct) =
-  withDict (singICT ct) $
-  Dict
-singIT STKey = Dict
-singIT STUnit = Dict
-singIT STSignature = Dict
-singIT STChainId = Dict
-singIT (STOption st) =
-  withDict (singIT st) $
-  Dict
-singIT (STList st) =
-  withDict (singIT st) $
-  Dict
-singIT (STSet st) =
-  withDict (singICT st) $
-  Dict
-singIT STOperation  = Dict
-singIT (STContract st) =
-  withDict (singIT st) $
-  Dict
-singIT (STPair st su) =
-  withDict (singIT st) $
-  withDict (singIT su) $
-  Dict
-singIT (STOr st su) =
-  withDict (singIT st) $
-  withDict (singIT su) $
-  Dict
-singIT (STLambda st su) =
-  withDict (singIT st) $
-  withDict (singIT su) $
-  Dict
-singIT (STMap st su) =
-  withDict (singICT st) $
-  withDict (singIT su) $
-  Dict
-singIT (STBigMap st su) =
-  withDict (singICT st) $
-  withDict (singIT su) $
-  Dict
-
--- | Make a type non-explicit
-unExplicitType :: U.Type -> U.T
-unExplicitType =
-  \case
-    U.Type t _ -> t
-
--- | Convert a `U.Comparable` to `CT`
-fromUntypedComparable :: U.Comparable -> CT
-fromUntypedComparable (U.Comparable ct _) = ct
-
--- | Convert a `U.Type` to `T`
-fromUntypedT' :: U.Type -> T
-fromUntypedT' = fromUntypedT . unExplicitType
-
--- | Convert a `U.T` to `T`
-fromUntypedT :: U.T -> T
-fromUntypedT (U.Tc ct) = Tc ct
-fromUntypedT U.TKey = TKey
-fromUntypedT U.TUnit = TUnit
-fromUntypedT U.TChainId = TChainId
-fromUntypedT U.TSignature = TSignature
-fromUntypedT (U.TOption x) = TOption $ fromUntypedT' x
-fromUntypedT (U.TList x) = TList $ fromUntypedT' x
-fromUntypedT (U.TSet ct) = TSet $ fromUntypedComparable ct
-fromUntypedT U.TOperation = TOperation
-fromUntypedT (U.TContract x) = TContract $ fromUntypedT' x
-fromUntypedT (U.TPair _ _ x y) = TPair (fromUntypedT' x) (fromUntypedT' y)
-fromUntypedT (U.TOr _ _ x y) = TOr (fromUntypedT' x) (fromUntypedT' y)
-fromUntypedT (U.TLambda x y) = TLambda (fromUntypedT' x) (fromUntypedT' y)
-fromUntypedT (U.TMap ct x) = TMap (fromUntypedComparable ct) $ fromUntypedT' x
-fromUntypedT (U.TBigMap ct x) = TBigMap (fromUntypedComparable ct) $ fromUntypedT' x
-
-parseSignatures :: String -> Opt.Parser (Maybe [Maybe Signature])
-parseSignatures name =
-  Opt.option Opt.auto $ mconcat
-    [ Opt.long name
-    , Opt.metavar "Maybe [Maybe Signature]"
-    , Opt.help "Ordered list of signatures, with Nothing for missing. Elide to dump the message to sign."
-    ]
-
--- | Parse some `T`
-parseSomeT :: String -> Opt.Parser (SomeSing T)
-parseSomeT name =
-  (\typeStr ->
-    let parsedType = parseNoEnv
-          type_
-          name
-          typeStr
-     in let type' = either (error . T.pack . show) unExplicitType parsedType
-     in withSomeSingT (fromUntypedT type') SomeSing
-  ) <$>
-  Opt.strOption @Text
-    (mconcat
-      [ Opt.long $ name ++ "Type"
-      , Opt.metavar "Michelson Type"
-      , Opt.help $ "The Michelson Type of " ++ name
-      ])
-
-parseSomeContractParam :: String -> Opt.Parser SomeContractParam
-parseSomeContractParam name =
-  (\(SomeSing (st :: Sing t)) paramStr ->
-    withDict (singIT st) $
-    withDict (singTypeableT st) $
-    assertOpAbsense @t $
-    assertBigMapAbsense @t $
-    let parsedParam = parseNoEnv
-          (G.parseTypeCheckValue @t)
-          name
-          paramStr
-     in let param = either (error . T.pack . show) id parsedParam
-     in SomeContractParam param (st, starNotes) (Dict, Dict)
-  ) <$>
-  parseSomeT name <*>
-  Opt.strOption @Text
-    (mconcat
-      [ Opt.long name
-      , Opt.metavar "Michelson Value"
-      , Opt.help $ "The Michelson Value: " ++ name
-      ])
-
-parseSomeContract :: String -> Opt.Parser TypeCheck.SomeContract
-parseSomeContract name =
-  Opt.option (Opt.str >>= someContractParser)
-    (mconcat
-      [ Opt.long name
-      , Opt.metavar "Michelson Contract Source"
-      , Opt.help $ "The Michelson contract: " ++ name
-      ])
-  where
-  someContractParser :: Text -> Opt.ReadM TypeCheck.SomeContract
-  someContractParser = either (fail . show) (either (fail . show) return . typeCheckContract mempty . expandContract) . parse program name
 
 data CmdLnArgs
   = PrintSpecialized
@@ -353,7 +104,7 @@ data CmdLnArgs
   | ChangeKeysMultisig
       { threshold :: Natural
       , newSignerKeys :: [PublicKey]
-      , targetContract :: Address
+      , targetContract :: EpAddress
       , multisigContract :: Address
       , counter :: Natural
       , signatures :: Maybe [Maybe Signature]
@@ -361,7 +112,7 @@ data CmdLnArgs
       }
   | RunMultisig
       { contractParameter :: SomeContractParam
-      , targetContract :: Address
+      , targetContract :: EpAddress
       , multisigContract :: Address
       , counter :: Natural
       , signatures :: Maybe [Maybe Signature]
@@ -442,7 +193,7 @@ argParser = Opt.hsubparser $ mconcat
       (ChangeKeysMultisig <$>
         parseNatural "threshold" <*>
         parseSignerKeys "newSignerKeys" <*>
-        parseAddress "target-contract" <*>
+        parseEpAddress "target-contract" <*>
         parseAddress "multisig-contract" <*>
         parseNatural "counter" <*>
         parseSignatures "signatures" <*>
@@ -454,7 +205,7 @@ argParser = Opt.hsubparser $ mconcat
       mkCommandParser "run-multisig"
       (RunMultisig <$>
         parseSomeContractParam "target-parameter" <*>
-        parseAddress "target-contract" <*>
+        parseEpAddress "target-contract" <*>
         parseAddress "multisig-contract" <*>
         parseNatural "counter" <*>
         parseSignatures "signatures" <*>
@@ -502,6 +253,7 @@ runCmdLnArgs = \case
          )
   InitWrapped (SomeContractStorage (initialWrappedStorage :: Value st)) threshold' signerKeys' ->
     TL.putStrLn $
+    withDict (singTypeableT (sing @st)) $
     printLorentzValue @(Value st, GenericMultisig.Storage PublicKey) forceOneLine $
     ( initialWrappedStorage
     , ( GenericMultisig.initialMultisigCounter
@@ -550,9 +302,9 @@ runCmdLnArgs = \case
        then error "threshold is greater than the number of signer keys"
        else
        case signatures of
-         Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @((), ContractRef ()) $ (targetContract, changeKeysParam)
+         Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @((), ContractRef ()) $ (toAddress targetContract, changeKeysParam)
          Just someSignatures ->
-            if checkSignaturesValid (targetContract, changeKeysParam) $ zip signerKeys someSignatures
+            if checkSignaturesValid (toAddress targetContract, changeKeysParam) $ zip signerKeys someSignatures
                then
                  TL.putStrLn $
                  printLorentzValue @(GenericMultisig.MainParams PublicKey ((), ContractRef ())) forceOneLine $
@@ -563,17 +315,22 @@ runCmdLnArgs = \case
     case contractParameter of
       SomeContractParam (param :: Value cp) _ (Dict, Dict) ->
         assertNestedBigMapsAbsense @cp $
-        let runParam = (counter, GenericMultisig.Operation @PublicKey @(Value cp, ContractRef (Value cp)) (param, toContractRef @(Value cp) targetContract)) in
-        case signatures of
-          Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @(Value cp, ContractRef (Value cp)) $ (multisigContract, runParam)
-          Just someSignatures ->
-            if checkSignaturesValid (multisigContract, runParam) $ zip signerKeys someSignatures
-               then
-                 TL.putStrLn $
-                 printLorentzValue @(GenericMultisig.MainParams PublicKey (Value cp, ContractRef (Value cp))) forceOneLine $
-                 asParameterType $
-                 (runParam, someSignatures)
-               else error "invalid signature(s) provided"
+        let runParam =
+              ( counter
+              , GenericMultisig.Operation
+                  @PublicKey
+                  @(Value cp, ContractRef (Value cp))
+                  (param, unsafeRootContractRef @cp targetContract))
+         in case signatures of
+              Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @(Value cp, ContractRef (Value cp)) $ (multisigContract, runParam)
+              Just someSignatures ->
+                if checkSignaturesValid (multisigContract, runParam) $ zip signerKeys someSignatures
+                   then
+                     TL.putStrLn $
+                     printLorentzValue @(GenericMultisig.MainParams PublicKey (Value cp, ContractRef (Value cp))) forceOneLine $
+                     asParameterType $
+                     (runParam, someSignatures)
+                   else error "invalid signature(s) provided"
   where
     forceOneLine = True
 
