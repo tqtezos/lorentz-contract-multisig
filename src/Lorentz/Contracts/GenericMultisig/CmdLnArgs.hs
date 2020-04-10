@@ -142,7 +142,7 @@ argParser = Opt.hsubparser $ mconcat
       "Dump the Specialized Multisig contract in form of Michelson code"
 
     printWrappedSubCmd =
-      mkCommandParser "print-specialized"
+      mkCommandParser "print-wrapped"
       (PrintWrapped <$>
         parseSomeContract "contractToWrap" <*>
         outputOptions <*>
@@ -159,7 +159,7 @@ argParser = Opt.hsubparser $ mconcat
       "Dump the intial storage for the Specialized Multisig contract"
 
     initWrappedSubCmd =
-      mkCommandParser "init-specialized"
+      mkCommandParser "init-wrapped"
       (InitWrapped <$>
         parseSomeContractStorage "targetStorage" <*>
         parseNatural "threshold" <*>
@@ -322,7 +322,8 @@ runCmdLnArgs = \case
                   @(Value cp, ContractRef (Value cp))
                   (param, unsafeRootContractRef @cp targetContract))
          in case signatures of
-              Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @(Value cp, ContractRef (Value cp)) $ (multisigContract, runParam)
+              Nothing -> do
+                print . ("0x" <>) . Base16.encode . lPackValue . asPackType @(Value cp, ContractRef (Value cp)) $ (multisigContract, runParam)
               Just someSignatures ->
                 if checkSignaturesValid (multisigContract, runParam) $ zip signerKeys someSignatures
                    then

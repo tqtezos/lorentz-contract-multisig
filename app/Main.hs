@@ -6,7 +6,6 @@
 module Main where
 
 import Control.Applicative
--- import Control.Monad hiding (fail)
 import Data.Function
 import System.IO
 import Prelude (die, displayException, catchAny)
@@ -19,7 +18,6 @@ import Michelson.Printer
 
 import qualified Options.Applicative as Opt
 import qualified Data.Text.Lazy as TL
-import Data.Singletons
 import Text.PrettyPrint.ANSI.Leijen.Internal (Doc, linebreak)
 
 import qualified Lorentz.Contracts.GenericMultisig.CmdLnArgs as GenericMultisigCmdLnArgs

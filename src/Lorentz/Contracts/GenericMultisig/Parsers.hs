@@ -12,12 +12,10 @@ import Data.Monoid
 import Data.Functor
 import Control.Applicative
 import Control.Monad
-import Text.ParserCombinators.ReadP (ReadP)
 import Text.Read
 import Text.Show
 import Data.Function
 import Data.Proxy
-import qualified Text.ParserCombinators.ReadP as P
 
 import Tezos.Crypto
 
@@ -25,7 +23,6 @@ import qualified Tezos.Crypto.Ed25519 as Ed25519
 import qualified Tezos.Crypto.Secp256k1 as Secp256k1
 import qualified Tezos.Crypto.P256 as P256
 
-import qualified Tezos.Address as Tezos
 import Lorentz (PublicKey, Address, View(..), GetDefaultEntryPointArg, NiceParameterFull, TAddress(..), callingDefTAddress)
 import Michelson.Typed.T
 import qualified Michelson.TypeCheck.Types as TypeCheck
@@ -47,55 +44,10 @@ import Lorentz.Contracts.GenericMultisig.Wrapper (parseTypeCheckValue)
 import Lorentz.Contracts.SomeContractStorage
 import Lorentz.Contracts.SomeContractParam
 import Michelson.Typed.Sing.Missing
-
----------------
--- Read Address
----------------
-
--- | Parse something between the two given `Char`'s
-betweenChars :: Char -> Char -> ReadP a -> ReadP a
-betweenChars beforeChar afterChar =
-  P.char beforeChar `P.between` P.char afterChar
-
--- | Parse something in parentheses
-inParensP :: ReadP a -> ReadP a
-inParensP = '(' `betweenChars` ')'
-
--- | Parse something in double-quotes: @"[something]"@
-inQuotesP :: ReadP a -> ReadP a
-inQuotesP = '"' `betweenChars` '"'
-
--- | Attempt to parse with given modifier, otherwise parse without
-maybeLiftP :: (ReadP a -> ReadP a) -> ReadP a -> ReadP a
-maybeLiftP liftP = liftM2 (<|>) liftP id
-
--- | Attempt to parse `inParensP`, else parse without
-maybeInParensP :: ReadP a -> ReadP a
-maybeInParensP = maybeLiftP inParensP
-
--- | Attempt to parse `inQuotesP`, else parse without
-maybeInQuotesP :: ReadP a -> ReadP a
-maybeInQuotesP = maybeLiftP inQuotesP
-
--- | Read an `Address`, inside or outside of @""@'s
-readAddressP :: ReadP Address
-readAddressP =
-      maybeInParensP . maybeInQuotesP $
-        ensureAddressPrefix >>
-        P.munch1 isAlphaNum >>= \addressStr ->
-          case Tezos.parseAddress $ T.pack addressStr of
-            Left err -> fail $ show err
-            Right address' -> return address'
-  where
-    ensureAddressPrefix =
-      (do {('t':'z':'1':_) <- P.look; return ()}) <|>
-      (do {('K':'T':'1':_) <- P.look; return ()})
+import Tezos.Crypto.Orphans
 
 instance Read Address where
   readPrec = readP_to_Prec $ const readAddressP
-
--- END Read Address
-
 
 -- | Parse an `Address` argument, given its field name
 parseAddress :: String -> Opt.Parser Address
@@ -210,12 +162,6 @@ instance Read Secp256k1.PublicKey where
 instance Read P256.PublicKey where
   readPrec = readCrypto P256.parsePublicKey
 
-instance Read PublicKey where
-  readPrec =
-    fmap PublicKeyEd25519 readPrec <|>
-    fmap PublicKeySecp256k1 readPrec <|>
-    fmap PublicKeyP256 readPrec
-
 -- | Parse the signer keys
 parseSignerKeys :: String -> Opt.Parser [PublicKey]
 parseSignerKeys name =
@@ -257,14 +203,6 @@ instance Read Secp256k1.Signature where
 
 instance Read P256.Signature where
   readPrec = readCrypto P256.parseSignature
-
-
-instance Read Signature where
-  readPrec =
-   fmap SignatureEd25519 readPrec <|>
-   fmap SignatureSecp256k1 readPrec <|>
-   fmap SignatureP256 readPrec <|>
-   fmap SignatureGeneric readPrec
 
 parseSignatures :: String -> Opt.Parser (Maybe [Maybe Signature])
 parseSignatures name =
