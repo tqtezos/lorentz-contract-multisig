@@ -4,14 +4,10 @@
 _definitions:
   _top-level:
     - &meta
-        author:              camlCase, Serokell, Tocqueville Group
-        maintainer:          Serokell <hi@serokell.io>
-        copyright:           2018 camlCase, 2019 Tocqueville Group
-        license:             AGPL-3.0-or-later
         license-file:        LICENSE
         git:                 git@gitlab.com:morley-framework/morley.git
-        homepage:            https://gitlab.com/morley-framework/morley
-        bug-reports:         https://issues.serokell.io/issues/TM
+        homepage:            https://github.com/tqtezos/lorentz-contract-multisig
+        bug-reports:         https://github.com/tqtezos/lorentz-contract-multisig/issues
 
     - &default-extensions
         - ApplicativeDo
