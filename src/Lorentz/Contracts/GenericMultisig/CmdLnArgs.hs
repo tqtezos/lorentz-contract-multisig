@@ -73,7 +73,11 @@ assertIsComparable f =
     _ -> error "assertIsComparable"
 
 data CmdLnArgs
-  = PrintSpecialized
+  = Print223
+      { outputPath :: Maybe FilePath
+      , oneline :: Bool
+      }
+  | PrintSpecialized
       { parameterType :: SomeSing T
       , outputPath :: Maybe FilePath
       , oneline :: Bool
@@ -121,7 +125,8 @@ data CmdLnArgs
 
 argParser :: Opt.Parser CmdLnArgs
 argParser = Opt.hsubparser $ mconcat
-  [ printSpecializedSubCmd
+  [ print223SubCmd
+  , printSpecializedSubCmd
   , printWrappedSubCmd
   , initSpecializedSubCmd
   , initWrappedSubCmd
@@ -135,6 +140,11 @@ argParser = Opt.hsubparser $ mconcat
       Opt.command commandName $
       Opt.info (Opt.helper <*> parser) $
       Opt.progDesc desc
+
+    print223SubCmd =
+      mkCommandParser "print-223"
+      (Print223 <$> outputOptions <*> onelineOption)
+      "Dump the 2/2/3 Multisig contract in form of Michelson code"
 
     printSpecializedSubCmd =
       mkCommandParser "print-specialized"
@@ -222,6 +232,10 @@ infoMod = mconcat
 
 runCmdLnArgs :: CmdLnArgs -> IO ()
 runCmdLnArgs = \case
+  Print223 mOutput forceOneLine' ->
+    maybe TL.putStrLn writeFileUtf8 mOutput $
+    printLorentzContract forceOneLine' $
+    GenericMultisig.generigMultisigContract223
   PrintSpecialized (SomeSing (st :: Sing t)) mOutput forceOneLine' ->
     withDict (singIT st) $
     withDict (singTypeableT st) $
