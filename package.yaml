@@ -34,7 +34,6 @@ library:
     - aeson
     - constraints
     - binary
-    # - lorentz-contract-param
     - optparse-applicative
     - transformers
     - megaparsec
