@@ -172,6 +172,16 @@ parseSignerKeys name =
     , Opt.help $ "Public keys of multisig " <> name <> "."
     ]
 
+-- | Parse pairs of signer keys
+parseSignerKeyPairs :: String -> Opt.Parser [(PublicKey, PublicKey)]
+parseSignerKeyPairs name =
+  Opt.option Opt.auto $
+  mconcat
+    [ Opt.long name
+    , Opt.metavar "[(PublicKey, PublicKey)]"
+    , Opt.help $ "Public keys of multisig " <> name <> "."
+    ]
+
 -- | Parse `SomeContractStorage`, see `parseSomeContractParam`
 parseSomeContractStorage :: String -> Opt.Parser SomeContractStorage
 parseSomeContractStorage name =
