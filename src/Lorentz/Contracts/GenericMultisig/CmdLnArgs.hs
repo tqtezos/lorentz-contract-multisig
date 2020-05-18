@@ -87,6 +87,10 @@ data CmdLnArgs
       , outputPath :: Maybe FilePath
       , oneline :: Bool
       }
+  | Init223
+      { threshold :: Natural
+      , signerKeyPairs :: [(PublicKey, PublicKey)]
+      }
   | InitSpecialized
       { threshold :: Natural
       , signerKeys :: [PublicKey]
@@ -128,6 +132,7 @@ argParser = Opt.hsubparser $ mconcat
   [ print223SubCmd
   , printSpecializedSubCmd
   , printWrappedSubCmd
+  , init223SubCmd
   , initSpecializedSubCmd
   , initWrappedSubCmd
   , getCounterSpecializedSubCmd
@@ -159,6 +164,14 @@ argParser = Opt.hsubparser $ mconcat
         onelineOption
       )
       "Dump the Wrapped Multisig contract in form of Michelson code"
+
+    init223SubCmd =
+      mkCommandParser "init-223"
+      (Init223 <$>
+        parseNatural "threshold" <*>
+        parseSignerKeyPairs "signerKeyPairs"
+      )
+      "Dump the intial storage for the Specialized Multisig contract"
 
     initSpecializedSubCmd =
       mkCommandParser "init-specialized"
@@ -255,6 +268,16 @@ runCmdLnArgs = \case
             printLorentzContract oneline $
             GenericMultisig.genericMultisigContractWrapper @(Value cp) @(Value st) @PublicKey
             (I wrappedContractCode)
+  Init223 {..} ->
+    if threshold > genericLength signerKeyPairs
+       then error "threshold is greater than the number of signer keys"
+       else TL.putStrLn $
+         printLorentzValue @(GenericMultisig.Storage (PublicKey, PublicKey)) forceOneLine $
+         ( GenericMultisig.initialMultisigCounter
+         , ( threshold
+           , signerKeyPairs
+           )
+         )
   InitSpecialized {..} ->
     if threshold > genericLength signerKeys
        then error "threshold is greater than the number of signer keys"
