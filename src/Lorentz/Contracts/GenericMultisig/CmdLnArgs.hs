@@ -9,21 +9,27 @@ import Data.Eq
 import Data.Either
 import Data.Function (id)
 import Data.Functor
+import Data.Functor.Identity
 import Prelude (FilePath, IO, Ord(..), print, putStrLn)
 import Data.Maybe
 import Data.Typeable
 
-import Lorentz hiding (checkSignature, get)
+import Lorentz hiding (chainId, checkSignature, get)
+import Lorentz.Contracts.IsKey
+import Lorentz.Run (interpretLorentzInstr)
+
+import Michelson.Interpret
 import Michelson.Parser
+import Michelson.Test.Dummy
 import Michelson.Typed.Annotation
+import Michelson.Typed.EntryPoints hiding (parseEpAddress)
 import Michelson.Typed.Haskell.Value
+import Michelson.Typed.Instr
 import Michelson.Typed.Scope
 import Michelson.Typed.Sing
 import Michelson.Typed.T
-import Michelson.Typed.Instr
-import Michelson.Typed.EntryPoints hiding (parseEpAddress)
-import Util.IO
 import Tezos.Crypto (checkSignature)
+import Util.IO
 import qualified Michelson.TypeCheck.Types as TypeCheck
 
 import qualified Options.Applicative as Opt
@@ -42,6 +48,14 @@ import qualified Lorentz.Contracts.GenericMultisig.Wrapper as G (parseTypeCheckV
 
 import qualified Lorentz.Contracts.GenericMultisig as GenericMultisig
 import qualified Lorentz.Contracts.GenericMultisig.Type as GenericMultisig
+
+packer :: forall key a p. (IsKey key, NicePackedValue a, NiceParameterFull p) => ChainId -> Address -> ((Natural, GenericMultisig.GenericMultisigAction key a)) -> ByteString
+packer chainId' address' xs = either
+    (error . fromString . show)
+    (\case {Identity ys :& RNil -> ys})
+    $ interpretLorentzInstr env (GenericMultisig.packChainIdAndAddress @key @a @_ @_ @'[] @p) (Identity xs :& RNil)
+  where
+    env = dummyContractEnv { ceSelf = address', ceChainId = chainId' }
 
 -- | Assume that the given `EpAddress` points to the contract root
 unsafeRootContractRef :: ParameterScope cp => EpAddress -> ContractRef (Value cp)
@@ -117,6 +131,7 @@ data CmdLnArgs
       , counter :: Natural
       , signatures :: Maybe [Maybe Signature]
       , signerKeys :: [PublicKey]
+      , chainId :: ChainId
       }
   | RunMultisig
       { contractParameter :: SomeContractParam
@@ -125,6 +140,7 @@ data CmdLnArgs
       , counter :: Natural
       , signatures :: Maybe [Maybe Signature]
       , signerKeys :: [PublicKey]
+      , chainId :: ChainId
       }
 
 argParser :: Opt.Parser CmdLnArgs
@@ -220,7 +236,8 @@ argParser = Opt.hsubparser $ mconcat
         parseAddress "multisig-contract" <*>
         parseNatural "counter" <*>
         parseSignatures "signatures" <*>
-        parseSignerKeys "signerKeys"
+        parseSignerKeys "signerKeys" <*>
+        parseChainId "chainId"
       )
       "Dump the change keys parameter for the Specialized or Wrapped Multisig contract"
 
@@ -232,7 +249,8 @@ argParser = Opt.hsubparser $ mconcat
         parseAddress "multisig-contract" <*>
         parseNatural "counter" <*>
         parseSignatures "signatures" <*>
-        parseSignerKeys "signerKeys"
+        parseSignerKeys "signerKeys" <*>
+        parseChainId "chainId"
       )
       "Dump the run operation parameter for the Specialized or Wrapped Multisig contract"
 
@@ -334,14 +352,17 @@ runCmdLnArgs = \case
                  print signerKeys'
                  error "Stored signer keys do not match provided signer keys"
   ChangeKeysMultisig {..} ->
-    let changeKeysParam = (counter, GenericMultisig.ChangeKeys @PublicKey @((), ContractRef ()) (threshold, newSignerKeys)) in
+    let changeKeysParam = (counter, GenericMultisig.ChangeKeys @PublicKey @((), ContractRef ()) (threshold, newSignerKeys))
+        bytes = packer @PublicKey @((), ContractRef ()) @(GenericMultisig.ChangeKeyParams PublicKey) chainId multisigContract changeKeysParam
+    in
     if threshold > genericLength newSignerKeys
        then error "threshold is greater than the number of signer keys"
        else
        case signatures of
-         Nothing -> print . ("0x" <>) . Base16.encode . lPackValue . asPackType @((), ContractRef ()) $ (toAddress targetContract, changeKeysParam)
+         Nothing -> print . ("0x" <>) . Base16.encode $ bytes
+         -- . lPackValue . asPackType @((), ContractRef ()) $ (toAddress targetContract, changeKeysParam)
          Just someSignatures ->
-            if checkSignaturesValid (toAddress targetContract, changeKeysParam) $ zip signerKeys someSignatures
+            if checkSignaturesValid bytes $ zip signerKeys someSignatures
                then
                  TL.putStrLn $
                  printLorentzValue @(GenericMultisig.MainParams PublicKey ((), ContractRef ())) forceOneLine $
@@ -358,11 +379,15 @@ runCmdLnArgs = \case
                   @PublicKey
                   @(Value cp, ContractRef (Value cp))
                   (param, unsafeRootContractRef @cp targetContract))
+            bytes = packer
+                   @PublicKey
+                   @(Value cp, ContractRef (Value cp))
+                   @(GenericMultisig.MainParams PublicKey (Value cp, ContractRef (Value cp)))
+                   chainId multisigContract runParam
          in case signatures of
-              Nothing -> do
-                print . ("0x" <>) . Base16.encode . lPackValue . asPackType @(Value cp, ContractRef (Value cp)) $ (multisigContract, runParam)
+              Nothing -> print . ("0x" <>) . Base16.encode $ bytes
               Just someSignatures ->
-                if checkSignaturesValid (multisigContract, runParam) $ zip signerKeys someSignatures
+                if checkSignaturesValid bytes $ zip signerKeys someSignatures
                    then
                      TL.putStrLn $
                      printLorentzValue @(GenericMultisig.MainParams PublicKey (Value cp, ContractRef (Value cp))) forceOneLine $
@@ -375,13 +400,9 @@ runCmdLnArgs = \case
     asParameterType :: forall cp. GenericMultisig.MainParams PublicKey cp -> GenericMultisig.MainParams PublicKey cp
     asParameterType = id
 
-    asPackType :: forall cp. (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey cp)) -> (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey cp))
-    asPackType = id
-
-checkSignaturesValid :: NicePackedValue cp => (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey (cp, ContractRef cp))) -> [(PublicKey, Maybe Signature)] -> Bool
+checkSignaturesValid :: ByteString -> [(PublicKey, Maybe Signature)] -> Bool
 checkSignaturesValid = all . checkSignatureValid
 
-checkSignatureValid :: NicePackedValue cp => (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey (cp, ContractRef cp))) -> (PublicKey, Maybe Signature) -> Bool
+checkSignatureValid :: ByteString -> (PublicKey, Maybe Signature) -> Bool
 checkSignatureValid _ (_, Nothing) = True
-checkSignatureValid xs (pubKey, Just sig) = checkSignature pubKey sig (lPackValue xs)
-
+checkSignatureValid a (pubKey, Just sig) = checkSignature pubKey sig a
