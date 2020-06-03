@@ -49,11 +49,12 @@ import qualified Lorentz.Contracts.GenericMultisig.Wrapper as G (parseTypeCheckV
 import qualified Lorentz.Contracts.GenericMultisig as GenericMultisig
 import qualified Lorentz.Contracts.GenericMultisig.Type as GenericMultisig
 
+-- | Interpret Michelson code and generate corresponding bytestring.
 packer :: forall key a p. (IsKey key, NicePackedValue a, NiceParameterFull p) => ChainId -> Address -> ((Natural, GenericMultisig.GenericMultisigAction key a)) -> ByteString
 packer chainId' address' xs = either
     (error . fromString . show)
     (\case {Identity ys :& RNil -> ys})
-    $ interpretLorentzInstr env (GenericMultisig.packChainIdAndAddress @key @a @_ @_ @'[] @p) (Identity xs :& RNil)
+    $ interpretLorentzInstr env (GenericMultisig.packWithChainId @key @a @_ @_ @'[] @p) (Identity xs :& RNil)
   where
     env = dummyContractEnv { ceSelf = address', ceChainId = chainId' }
 

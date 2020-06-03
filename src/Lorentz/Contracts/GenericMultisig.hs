@@ -72,14 +72,15 @@ preparePayload _ = do
   --   } ;
   dip $ do
     unpair
-    dup >> packChainIdAndAddress @key @a @b @c @_ @p
+    dup >> packWithChainId @key @a @b @c @_ @p
       -- self @p
     dip (unpair @Natural >> dip swap) >> swap
 
-packChainIdAndAddress
+-- | Pack the bytes of the chain id with the current contract address
+packWithChainId
     :: forall key a b c s p. (IsKey key, NicePackedValue a, NiceParameterFull p)
     => ((Natural, GenericMultisigAction key a) & s) :-> (ByteString & s)
-packChainIdAndAddress = selfCalling @p CallDefault >> address >> chainId >> pair >> pair >>  pack @((ChainId,Address), (Natural, GenericMultisigAction key a))
+packWithChainId = selfCalling @p CallDefault >> address >> chainId >> pair >> pair >>  pack @((ChainId,Address), (Natural, GenericMultisigAction key a))
 
 
 -- | `assertEq` on the parameter counter and storage counter
