@@ -5,11 +5,13 @@ module Lorentz.Contracts.GenericMultisig.Parsers where
 import Prelude (FilePath, ($), Natural, error)
 import Data.Char
 import Data.Bool
+import Data.Bifunctor (first)
 import Data.Either
 import Data.String
 import Data.Maybe
 import Data.Monoid
 import Data.Functor
+import Data.String
 import Control.Applicative
 import Control.Monad
 import Text.Read
@@ -17,13 +19,14 @@ import Text.Show
 import Data.Function
 import Data.Proxy
 
+import qualified Tezos.Core as Core
 import Tezos.Crypto
 
 import qualified Tezos.Crypto.Ed25519 as Ed25519
 import qualified Tezos.Crypto.Secp256k1 as Secp256k1
 import qualified Tezos.Crypto.P256 as P256
 
-import Lorentz (PublicKey, Address, View(..), GetDefaultEntryPointArg, NiceParameterFull, TAddress(..), callingDefTAddress)
+import Lorentz (ChainId, PublicKey, Address, View(..), GetDefaultEntryPointArg, NiceParameterFull, TAddress(..), callingDefTAddress)
 import Michelson.Typed.T
 import qualified Michelson.TypeCheck.Types as TypeCheck
 import Michelson.Typed.Annotation
@@ -222,6 +225,16 @@ parseSignatures name =
     , Opt.help "Ordered list of signatures, with Nothing for missing. Elide to dump the message to sign."
     ]
 
+parseChainId :: String -> Opt.Parser ChainId
+parseChainId name =
+  Opt.option readChainId $ mconcat
+    [ Opt.long name
+    , Opt.metavar "ChainId"
+    , Opt.help "Chain Id"
+    ]
+  where
+    readChainId = Opt.eitherReader (first show . Core.parseChainId . fromString)
+
 -- | Parse some `T`
 parseSomeT :: String -> Opt.Parser (SomeSing T)
 parseSomeT name =
@@ -273,4 +286,3 @@ parseSomeContract name =
   where
   someContractParser :: T.Text -> Opt.ReadM TypeCheck.SomeContract
   someContractParser = either (fail . show) (either (fail . show) return . typeCheckContract mempty . expandContract) . parse program name
-

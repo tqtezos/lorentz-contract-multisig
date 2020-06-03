@@ -72,10 +72,16 @@ preparePayload _ = do
   --   } ;
   dip $ do
     unpair
-    dup >> selfCalling @p CallDefault >> address >> pair
+    dup >> packWithChainId @key @a @b @c @_ @p
       -- self @p
-    pack @(Address, (Natural, GenericMultisigAction key a))
     dip (unpair @Natural >> dip swap) >> swap
+
+-- | Pack the bytes of the chain id with the current contract address
+packWithChainId
+    :: forall key a b c s p. (IsKey key, NicePackedValue a, NiceParameterFull p)
+    => ((Natural, GenericMultisigAction key a) & s) :-> (ByteString & s)
+packWithChainId = selfCalling @p CallDefault >> address >> chainId >> pair >> pair >>  pack @((ChainId,Address), (Natural, GenericMultisigAction key a))
+
 
 -- | `assertEq` on the parameter counter and storage counter
 checkCountersMatch :: ((Natural, b) & (Natural & s)) :-> (b & s)
@@ -345,4 +351,3 @@ generigMultisigContract223 =
   genericMultisigContractSimpleStorage (Proxy @(Parameter (PublicKey, PublicKey) (Lambda () [Operation]))) $ do
     unit
     exec
-
