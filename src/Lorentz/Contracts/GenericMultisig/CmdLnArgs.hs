@@ -22,16 +22,20 @@ import Michelson.Typed.Sing
 import Michelson.Typed.T
 import Michelson.Typed.Instr
 import Michelson.Typed.EntryPoints hiding (parseEpAddress)
+import Morley.Micheline
 import Util.IO
-import Tezos.Crypto (checkSignature)
+import Tezos.Crypto (Signature(..), checkSignature)
+import qualified Tezos.Crypto.Ed25519 as Ed25519
 import qualified Michelson.TypeCheck.Types as TypeCheck
 
 import qualified Options.Applicative as Opt
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as TL
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Base16 as Base16
 import Data.Constraint
 import Data.Singletons
+import Data.Aeson (encode)
 
 import Lorentz.Contracts.GenericMultisig.Parsers
 import Michelson.Typed.Value.Missing ()
@@ -126,6 +130,13 @@ data CmdLnArgs
       , signatures :: Maybe [Maybe Signature]
       , signerKeys :: [PublicKey]
       }
+  | Run223
+      -- { contractParameter223 :: Parameter (PublicKey, PublicKey) (Lambda () [Operation])
+      { multisigContract :: Address
+      , counter :: Natural
+      -- , signatures :: Maybe [(Maybe Signature, Maybe Signature)]
+      , signerKeyPairs :: [(PublicKey, PublicKey)]
+      }
 
 argParser :: Opt.Parser CmdLnArgs
 argParser = Opt.hsubparser $ mconcat
@@ -139,6 +150,7 @@ argParser = Opt.hsubparser $ mconcat
   , getCounterWrappedSubCmd
   , changeKeysMultisigSubCmd
   , runMultisigSubCmd
+  , run223SubCmd
   ]
   where
     mkCommandParser commandName parser desc =
@@ -233,6 +245,18 @@ argParser = Opt.hsubparser $ mconcat
         parseNatural "counter" <*>
         parseSignatures "signatures" <*>
         parseSignerKeys "signerKeys"
+      )
+      "Dump the run operation parameter for the Specialized or Wrapped Multisig contract"
+
+    run223SubCmd =
+      mkCommandParser "run-223"
+      (Run223 <$>
+        -- parseSomeContractParam "target-parameter" <*>
+        -- parseEpAddress "target-contract" <*>
+        parseAddress "multisig-contract" <*>
+        parseNatural "counter" <*>
+        -- parseSignatures "signatures" <*>
+        parseSignerKeyPairs "signerKeyPairs"
       )
       "Dump the run operation parameter for the Specialized or Wrapped Multisig contract"
 
@@ -369,14 +393,47 @@ runCmdLnArgs = \case
                      asParameterType $
                      (runParam, someSignatures)
                    else error "invalid signature(s) provided"
+  Run223 {..} ->
+    -- case contractParameter of
+    --   SomeContractParam (param :: Value cp) _ (Dict, Dict) ->
+    --     assertNestedBigMapsAbsense @cp $
+        let runParam =
+              ( counter
+              , GenericMultisig.Operation
+                  @(PublicKey, PublicKey)
+                  @(Lambda () [Operation])
+                  failWith
+              ) -- (param, unsafeRootContractRef @cp targetContract))
+         in
+         -- in case signatures of
+         --      Nothing -> do
+         --        print . ("0x" <>) . Base16.encode . lPackValue . asPackType @(Value cp, ContractRef (Value cp)) $ (multisigContract, runParam)
+         --      Just someSignatures ->
+         --        if checkSignaturesValid (multisigContract, runParam) $ zip signerKeys someSignatures
+         --           then
+                     TL.putStrLn $
+                     printLorentzValue @(GenericMultisig.MainParams (PublicKey, PublicKey) (Lambda () [Operation])) forceOneLine $
+                     -- BL.putStrLn $
+                     -- encode . toExpression . toVal $
+                     asParameterType223 $
+                     (runParam, [Just (defSignature, defSignature), Nothing, Nothing]) -- someSignatures)
+                   -- else error "invalid signature(s) provided"
   where
     forceOneLine = True
 
     asParameterType :: forall cp. GenericMultisig.MainParams PublicKey cp -> GenericMultisig.MainParams PublicKey cp
     asParameterType = id
 
+    asParameterType223 :: forall cp. GenericMultisig.MainParams (PublicKey, PublicKey) cp -> GenericMultisig.MainParams (PublicKey, PublicKey) cp
+    asParameterType223 = id
+
     asPackType :: forall cp. (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey cp)) -> (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey cp))
     asPackType = id
+
+    defSignature :: Signature
+    defSignature = SignatureEd25519 $
+      Ed25519.detSecretKey (fromString def) `Ed25519.sign`
+      fromString def
 
 checkSignaturesValid :: NicePackedValue cp => (Address, (Natural, GenericMultisig.GenericMultisigAction PublicKey (cp, ContractRef cp))) -> [(PublicKey, Maybe Signature)] -> Bool
 checkSignaturesValid = all . checkSignatureValid
