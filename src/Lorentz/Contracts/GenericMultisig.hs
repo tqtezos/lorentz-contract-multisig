@@ -48,7 +48,7 @@ assertNoTokensSent = do
   --   # Assert no token was sent:
   --   # to send tokens, the default entry point should be used
   --   PUSH mutez 0 ; AMOUNT ; ASSERT_CMPEQ ;
-  let tokensSentOutsideDefault = [mt|Some tokens were sent to this contract outside of the default entry point.|]
+  let tokensSentOutsideDefault = [mt|Some tokens were sent to this contract outside of a unit entry point.|]
   push (toMutez 0 :: Mutez) >> amount >> assertEq tokensSentOutsideDefault
 
 -- | Pair the payload with the current contract address, to ensure signatures
