@@ -48,9 +48,8 @@ assertNoTokensSent = do
   --   # Assert no token was sent:
   --   # to send tokens, the default entry point should be used
   --   PUSH mutez 0 ; AMOUNT ; ASSERT_CMPEQ ;
-  let tokensSentOutsideDefault = [mt|Some tokens were sent to this contract outside of the default entry point.|]
+  let tokensSentOutsideDefault = [mt|Some tokens were sent to this contract outside of a unit entry point.|]
   push (toMutez 0 :: Mutez) >> amount >> assertEq tokensSentOutsideDefault
-
 
 -- | Pair the payload with the current contract address, to ensure signatures
 -- | can't be replayed accross different contracts if a key is reused.
@@ -72,16 +71,15 @@ preparePayload _ = do
   --   } ;
   dip $ do
     unpair
-    dup >> packWithChainId @key @a @b @c @_ @p
+    dup >> packWithChainId @key @a @_ @p
       -- self @p
     dip (unpair @Natural >> dip swap) >> swap
 
 -- | Pack the bytes of the chain id with the current contract address
 packWithChainId
-    :: forall key a b c s p. (IsKey key, NicePackedValue a, NiceParameterFull p)
+    :: forall key a s p. (IsKey key, NicePackedValue a, NiceParameterFull p)
     => ((Natural, GenericMultisigAction key a) & s) :-> (ByteString & s)
 packWithChainId = selfCalling @p CallDefault >> address >> chainId >> pair >> pair >>  pack @((ChainId,Address), (Natural, GenericMultisigAction key a))
-
 
 -- | `assertEq` on the parameter counter and storage counter
 checkCountersMatch :: ((Natural, b) & (Natural & s)) :-> (b & s)
@@ -332,9 +330,10 @@ specializedMultisigContract ::
      , Typeable a
      , ParameterHasEntryPoints (Parameter key (a, ContractRef a))
      )
-  => ContractCode (Parameter key (a, ContractRef a)) (Storage key)
-specializedMultisigContract =
-  genericMultisigContractSimpleStorage @(a, ContractRef a) @key (Proxy @(Parameter key (a, ContractRef a))) $ do
+  => ContractCode (MainParams key (a, ContractRef a)) (Storage key)
+specializedMultisigContract = do
+  unpair
+  genericMultisigContractSimpleStorageMain @(a, ContractRef a) @key (Proxy @(Parameter key (a, ContractRef a))) $ do
     unpair
     dip $ do
       dip nil
