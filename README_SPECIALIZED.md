@@ -1,7 +1,7 @@
 
 # Originated Example
 
-You can find an originated example [here](https://better-call.dev/babylon/KT1HmDgVFNM1t9sSYdURzUXWLUhb6AMyNxFW/operations).
+You can find an originated example, of a version that accepts and locks Tez [here](https://better-call.dev/babylon/KT1HmDgVFNM1t9sSYdURzUXWLUhb6AMyNxFW/operations).
 
 ## Specialized Multisig Contract
 
@@ -377,3 +377,4 @@ This sequence of operations was run:
         Storage size: 149 bytes
         Consumed gas: 13782
 ```
+
