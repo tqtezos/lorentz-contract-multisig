@@ -155,6 +155,25 @@ Unless you're changing the keys/threshold, you sign and send:
 The contract will check the signatures, increment the counter, and call the 
 target contract with the given parameter value.
 
+
+### Parameter and storage types
+
+```
+parameter (pair (pair nat
+                      (or (pair nat
+                                (contract nat))
+                          (pair nat
+                                (list key))))
+                (list (option signature)));
+
+storage (pair nat
+              (pair nat
+                    (list key)));
+```
+
+
+### Printing the contract
+
 To print the contract, specialized to `nat`:
 
 ```bash
