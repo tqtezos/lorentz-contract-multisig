@@ -54,7 +54,7 @@ packer :: forall key a p. (IsKey key, NicePackedValue a, NiceParameterFull p) =>
 packer chainId' address' xs = either
     (error . fromString . show)
     (\case {Identity ys :& RNil -> ys})
-    $ interpretLorentzInstr env (GenericMultisig.packWithChainId @key @a @_ @_ @'[] @p) (Identity xs :& RNil)
+    $ interpretLorentzInstr env (GenericMultisig.packWithChainId @key @_ @'[] @p) (Identity xs :& RNil)
   where
     env = dummyContractEnv { ceSelf = address', ceChainId = chainId' }
 
