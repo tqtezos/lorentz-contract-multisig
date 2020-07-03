@@ -144,6 +144,17 @@ Fatal error:
 
 ## Specialized Multisig Contract
 
+The specialized multisig contract is a variant of the generic multisig contract where:
+- Tez may not be sent to the contract
+- Only one parameter type may be signed and sent to the contract
+
+Unless you're changing the keys/threshold, you sign and send:
+  * A value of the specialized parameter's type
+  * A target contract address, whose entrypoint matches the specialized parameter's type
+  * The signatures
+The contract will check the signatures, increment the counter, and call the 
+target contract with the given parameter value.
+
 To print the contract, specialized to `nat`:
 
 ```bash
