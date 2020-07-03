@@ -32,7 +32,6 @@ storage (pair nat
                     (list key)));
 ```
 
-
 ### Printing the contract
 
 To print the contract, specialized to `nat`:
@@ -69,6 +68,9 @@ threshold is greater than the number of signer keys
 CallStack (from HasCallStack):
   error, called at src/Lorentz/Contracts/GenericMultisig/CmdLnArgs.hs:376:13 in lorentz-contract-multisig-0.1.0.0-BUWXHalK6PtIEryQAwm6u2:Lorentz.Contracts.GenericMultisig.CmdLnArgs
 ```
+
+DISCLAIMER: the examples that follow use a version of the specialized multisig that
+has a `(unit %default)` parameter that locks Tez.
 
 ```bash
 ❯❯❯ tezos-client --wait none originate contract MultisigNat \
