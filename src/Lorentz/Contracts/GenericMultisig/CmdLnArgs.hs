@@ -10,7 +10,7 @@ import Data.Either
 import Data.Function (id)
 import Data.Functor
 import Data.Functor.Identity
-import Prelude (FilePath, IO, Ord(..), print, putStrLn)
+import Prelude (FilePath, IO, Ord(..), print, putStrLn, Bifunctor(..))
 import Data.Maybe
 import Data.Typeable
 
@@ -30,6 +30,7 @@ import Michelson.Typed.Sing
 import Michelson.Typed.T
 import Tezos.Crypto (checkSignature)
 import Util.IO
+import Util.Named
 import qualified Michelson.TypeCheck.Types as TypeCheck
 
 import qualified Options.Applicative as Opt
@@ -292,9 +293,9 @@ runCmdLnArgs = \case
        then error "threshold is greater than the number of signer keys"
        else TL.putStrLn $
          printLorentzValue @(GenericMultisig.Storage (PublicKey, PublicKey)) forceOneLine $
-         ( GenericMultisig.initialMultisigCounter
-         , ( threshold
-           , signerKeyPairs
+         ( #counter .! GenericMultisig.initialMultisigCounter
+         , ( #threshold .! threshold
+           , #keys      .! signerKeyPairs
            )
          )
   InitSpecialized {..} ->
@@ -302,9 +303,9 @@ runCmdLnArgs = \case
        then error "threshold is greater than the number of signer keys"
        else TL.putStrLn $
          printLorentzValue @(GenericMultisig.Storage PublicKey) forceOneLine $
-         ( GenericMultisig.initialMultisigCounter
-         , ( threshold
-           , signerKeys
+         ( #counter .! GenericMultisig.initialMultisigCounter
+         , ( #threshold .! threshold
+           , #keys      .! signerKeys
            )
          )
   InitWrapped (SomeContractStorage (initialWrappedStorage :: Value st)) threshold' signerKeys' ->
@@ -312,9 +313,9 @@ runCmdLnArgs = \case
     withDict (singTypeableT (sing @st)) $
     printLorentzValue @(Value st, GenericMultisig.Storage PublicKey) forceOneLine $
     ( initialWrappedStorage
-    , ( GenericMultisig.initialMultisigCounter
-      , ( threshold'
-        , signerKeys'
+    , ( #counter .! GenericMultisig.initialMultisigCounter
+      , ( #threshold .! threshold'
+        , #keys      .! signerKeys'
         )
       )
     )
@@ -328,7 +329,7 @@ runCmdLnArgs = \case
                 (error . T.pack . show)
                 (fromVal @(GenericMultisig.Storage PublicKey))
                 parsedStorage
-         in if storedSignerKeys == signerKeys
+         in if arg #keys storedSignerKeys == signerKeys
                then print storedCounter
                else do
                  putStrLn @Text "Stored signer keys:"
@@ -346,14 +347,14 @@ runCmdLnArgs = \case
                 (error . T.pack . show)
                 (fromVal @(Value t, GenericMultisig.Storage PublicKey))
                 parsedStorage
-         in if storedSignerKeys == signerKeys'
+         in if arg #keys storedSignerKeys == signerKeys'
                then print storedCounter
                else do
                  putStrLn @Text "Stored signer keys:"
                  print signerKeys'
                  error "Stored signer keys do not match provided signer keys"
   ChangeKeysMultisig {..} ->
-    let changeKeysParam = (counter, GenericMultisig.ChangeKeys @PublicKey @((), ContractRef ()) (threshold, newSignerKeys))
+    let changeKeysParam = (counter, GenericMultisig.ChangeKeys @PublicKey @((), ContractRef ()) (#threshold .! threshold, #keys .! newSignerKeys))
         bytes = packer @PublicKey @((), ContractRef ()) @(GenericMultisig.ChangeKeyParams PublicKey) chainId multisigContract changeKeysParam
     in
     if threshold > genericLength newSignerKeys
@@ -368,7 +369,7 @@ runCmdLnArgs = \case
                  TL.putStrLn $
                  printLorentzValue @(GenericMultisig.MainParams PublicKey ((), ContractRef ())) forceOneLine $
                  asParameterType $
-                 (changeKeysParam, someSignatures)
+                 (bimap (#counter .!) (#action .!) changeKeysParam, #sigs .! someSignatures)
                else error "invalid signature(s) provided"
   RunMultisig {..} ->
     case contractParameter of
@@ -393,7 +394,7 @@ runCmdLnArgs = \case
                      TL.putStrLn $
                      printLorentzValue @(GenericMultisig.MainParams PublicKey (Value cp, ContractRef (Value cp))) forceOneLine $
                      asParameterType $
-                     (runParam, someSignatures)
+                     (bimap (#counter .!) (#action .!) runParam, #sigs .! someSignatures)
                    else error "invalid signature(s) provided"
   where
     forceOneLine = True
