@@ -20,16 +20,15 @@ target contract with the given parameter value.
 ### Parameter and storage types
 
 ```
-parameter (pair (pair nat
-                      (or (pair nat
-                                (contract nat))
-                          (pair nat
-                                (list key))))
-                (list (option signature)));
+parameter (pair (pair (nat :counter)
+                      (or :action (pair nat (contract nat))
+                                  (pair (nat :threshold)
+                                        (list :keys key))))
+                (list :sigs (option signature)))
 
 storage (pair nat
               (pair nat
-                    (list key)));
+                    (list key)))
 ```
 
 ### Printing the contract
