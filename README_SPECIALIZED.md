@@ -1,7 +1,7 @@
 
 # Originated Example
 
-You can find an originated example [here](https://better-call.dev/carthage/KT1VPPxpysE3jPur2TKajhEnM84a8YUHJ9Rh/operations).
+You can find an originated example [here](https://better-call.dev/carthage/KT1NUp9a8gC5xQJDi4E9hr2WRZpUxx8BQrT3/operations).
 
 ## Specialized Multisig Contract
 
