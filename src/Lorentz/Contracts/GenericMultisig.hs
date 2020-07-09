@@ -217,8 +217,13 @@ genericMultisigContractMain p runParam = do
   dip unpair
   swap
   -- b on top of stack
-
-  dip $ multisigSetup @key p
+  dip $ do
+    forcedCoerce_ @(("counter" :! Natural,
+                "action" :! GenericMultisigAction key a),
+               "sigs" :! [Maybe (Sig key)])
+               @((Natural, GenericMultisigAction key a), [Maybe (Sig key)])
+    dip $ forcedCoerce_
+    multisigSetup @key p
   swap >> dip swap
 
   -- # We have now handled the signature verification part,
@@ -233,8 +238,8 @@ genericMultisigContractMain p runParam = do
   --   };
   -- PAIR }
   caseT @(GenericMultisigAction key a)
-    ( #cOperation /-> dip swap >> framed runParam -- (swap >> dip (swap >> dup >> dip runParam >> swap) >> swap >> dip swap)
-    , #cChangeKeys /-> (dip car >> swap >> pair >> swap >> nil)
+    ( #cOperation /-> forcedCoerce_ >> dip (forcedCoerce_ >> swap) >> framed runParam
+    , #cChangeKeys /-> forcedCoerce_ >> (dip (car >> forcedCoerce_) >> swap >> pair >> swap >> nil)
     )
   dip pair
   pair
@@ -283,6 +288,8 @@ genericMultisigContractSimpleStorageMain :: forall a key p. (IsKey key, NicePack
   -> '[ MainParams key a, Storage key] :-> '[ ([Operation], Storage key)]
 genericMultisigContractSimpleStorageMain p runParam = do
   -- { # Main entry point
+  dip forcedCoerce_
+  forcedCoerce_
   multisigSetup @key p
 
   -- # We have now handled the signature verification part,
@@ -297,8 +304,8 @@ genericMultisigContractSimpleStorageMain p runParam = do
   --   };
   -- PAIR }
   caseT @(GenericMultisigAction key a)
-    ( #cOperation /-> (swap >> dip runParam >> swap)
-    , #cChangeKeys /-> (dip car >> swap >> pair >> nil)
+    ( #cOperation /-> dip forcedCoerce_ >> (swap >> dip runParam >> swap)
+    , #cChangeKeys /-> forcedCoerce_ >> (dip (car >> forcedCoerce_) >> swap >> pair >> nil)
     )
   pair
 
@@ -350,3 +357,4 @@ generigMultisigContract223 =
   genericMultisigContractSimpleStorage (Proxy @(Parameter (PublicKey, PublicKey) (Lambda () [Operation]))) $ do
     unit
     exec
+

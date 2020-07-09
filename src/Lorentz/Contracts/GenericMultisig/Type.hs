@@ -10,11 +10,13 @@ import Lorentz hiding (concat)
 
 import Lorentz.Contracts.IsKey
 
+import Named
 import Fmt (Buildable(..), (+|), (|+))
 import Data.ByteString.Internal (unpackChars)
 
 import Text.Show (Show(..))
 
+deriving instance Read a => Read (NamedF Identity a label)
 
 ----------------------------------------------------------------------------
 -- Parameter
@@ -35,8 +37,8 @@ import Text.Show (Show(..))
 --
 -- Note: @threshold@ is also known as @quorum@
 type ChangeKeyParams key =
-  ( Natural     -- "threshold" :!
-  , [Public key] -- "keys"      :!
+  ( "threshold" :! Natural
+  , "keys"      :! [Public key]
   )
 
 -- | Either perform an `Operation` with the included contract or
@@ -68,10 +70,10 @@ instance (HasTypeAnn a, IsoValue a) => HasTypeAnn (GenericMultisigAction (Public
 --    deriving anyclass IsoValue
 -- @
 type MainParams key a =
-  ( ( Natural                 -- "counter" :!
-    , GenericMultisigAction key a  -- "action"  :!
+  ( ( "counter" :! Natural
+    , "action"  :! GenericMultisigAction key a
     )
-  , [Maybe (Sig key)]       -- "sigs"    :!
+  , "sigs"    :! [Maybe (Sig key)]
   )
 
 -- | Use `Default` to send tokens to the contract.
@@ -111,9 +113,9 @@ instance (HasTypeAnn a, IsoValue a) => ParameterHasEntryPoints (Parameter (Publi
 --      deriving anyclass IsoValue
 -- @
 type Storage key =
-  ( Natural -- "storedCounter" :!
-  , ( Natural     -- "threshold" :!
-    , [Public key] -- "keys"      :!
+  ( "counter" :! Natural
+  , ( "threshold"   :! Natural
+    , "keys"        :! [Public key]
     )
   )
 
