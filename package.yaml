@@ -2,7 +2,7 @@
 
 <<: *meta
 name:                lorentz-contract-multisig
-version:             0.1.0.1
+version:             0.1.1.0
 github:              "tqtezos/lorentz-contract-multisig"
 license:             BSD3
 author:              "Michael J. Klein TQ Tezos"
